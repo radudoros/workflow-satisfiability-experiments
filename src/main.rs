@@ -1,4 +1,4 @@
-use predicates::{binary_predicates, generate_mock_ud_predicates, generate_mock_ui_predicates};
+use predicates::{binary_predicates, generate_mock_ud_predicates, generate_mock_ui_predicates, weight_predicates, generate_mock_weight_predicates};
 use workflow::{graph, topo_sort};
 
 mod workflow;
@@ -63,6 +63,35 @@ fn plan_ordered(g: &mut graph, i: usize, node_order: &Vec<usize>, node_options: 
     g.nodes_id[node] = -1;
 }
 
+fn plan_weigthed(g: &mut graph, i: usize, node_order: &Vec<usize>, node_options: &Vec<i32>, preds : &weight_predicates, crt_weight: f64, allowed_weight: f64, sol: &mut Vec<i32>) {
+    if !sol.is_empty() || crt_weight - 0.0001 > allowed_weight {
+        // We already found a solution... prune out everything:
+        return;
+    }
+
+    if i >= node_order.len() {
+        sol.clone_from(&g.nodes_id);
+        return;
+    }
+
+    let node = node_order[i];
+
+    for opt in node_options.iter() {
+        g.nodes_id[node] = *opt;
+        let new_weight: f64 = preds.eval(g);
+
+        plan_weigthed(g, i + 1, node_order, node_options, preds, new_weight, allowed_weight,  sol);
+        
+        if !sol.is_empty() {
+            // avoid recalling predicates
+            break;
+        }
+    }
+
+    // reset for backtrack recursion:
+    g.nodes_id[node] = -1;
+}
+
 fn test_plan_simple(g: &mut graph) {
     let node_options = vec![0, 1, 2, 3, 4, 5, 6];
     let preds = generate_mock_ud_predicates();
@@ -102,6 +131,25 @@ fn test_plan_topo(g: &mut graph) {
 
 }
 
+fn test_plan_weigthed(g: &mut graph) {
+    let topo_sorted = topo_sort(g);
+
+    let node_options = vec![0, 1, 2, 3, 4, 5, 6];
+    let preds = generate_mock_weight_predicates();
+
+    let mut sol: Vec<i32> = Vec::new();
+    plan_weigthed(g, 0, &topo_sorted, &node_options, &preds, 0.0, 1.0, &mut sol);
+
+    if sol.is_empty() {
+        println!("No plans worked...")
+    } else {
+        println!("Found solution!");
+        for i in sol.iter() {
+            print!("{} ", i);
+        }
+        println!();
+    }
+}
 
 fn main() {
     
@@ -115,4 +163,5 @@ fn main() {
 
     test_plan_simple(&mut g);
     test_plan_topo(&mut g);
+    test_plan_weigthed(&mut g);
 }
