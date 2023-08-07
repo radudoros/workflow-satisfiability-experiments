@@ -1,3 +1,4 @@
+#[derive(Clone)]
 pub struct graph {
     // labels:
     pub nodes_id: Vec<i32>,
