@@ -1,16 +1,19 @@
+use std::fs::File;
+use std::io::{BufRead, BufReader};
+
 #[derive(Clone)]
 pub struct graph {
     // labels:
     pub nodes_id: Vec<i32>,
     // graph edges: (note that they're a DAG always)
-    pub adjacency_list: Vec<Vec<usize>>
+    pub adjacency_list: Vec<Vec<usize>>,
 }
 
 impl graph {
     pub fn new(sz: usize) -> graph {
         graph {
             nodes_id: vec![-1; sz],
-            adjacency_list:  vec![Vec::new(); sz]
+            adjacency_list: vec![Vec::new(); sz],
         }
     }
 
@@ -30,13 +33,42 @@ impl graph {
         }
     }
 
+    pub fn from_file(filename: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        // Open the file for reading
+        let file = File::open(filename)?;
+        let reader = BufReader::new(file);
+
+        // Read the number of nodes from the first line
+        let mut lines = reader.lines();
+        let n: usize = lines.next().unwrap()?.trim().parse()?;
+
+        // Initialize an empty graph with n nodes
+        let mut g = graph::new(n);
+
+        // Read edges from the remaining lines and add them to the graph
+        for line in lines {
+            let nums: Vec<usize> = line?
+                .trim()
+                .split_whitespace()
+                .map(|num| num.parse().unwrap())
+                .collect();
+
+            g.add_edge(nums[0], nums[1]);
+        }
+
+        Ok(g)
+    }
+
     pub fn add_edge(&mut self, parent: usize, child: usize) {
         self.adjacency_list[usize::from(parent)].push(child);
     }
 }
 
+#[allow(dead_code)]
 fn topo_sort_helper(g: &graph, v: usize, topo_sorted: &mut Vec<usize>, visited: &mut Vec<bool>) {
-    if visited[v] {return;}
+    if visited[v] {
+        return;
+    }
 
     visited[v] = true;
     for ch in g.adjacency_list[v].iter() {
@@ -46,6 +78,7 @@ fn topo_sort_helper(g: &graph, v: usize, topo_sorted: &mut Vec<usize>, visited: 
     topo_sorted.push(v)
 }
 
+#[allow(dead_code)]
 pub fn topo_sort(g: &graph) -> Vec<usize> {
     let mut visited: Vec<bool> = vec![false; g.nodes_id.len()];
     let mut topo_sorted: Vec<usize> = Vec::new();

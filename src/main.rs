@@ -1,26 +1,67 @@
-use predicates::{binary_predicates, generate_mock_ud_predicates, generate_mock_ui_predicates, weight_predicates, generate_mock_weight_predicates};
-use workflow::{graph, topo_sort};
+use planning::planning::plan_all;
+use workflow::graph;
 
 mod bipartite_matching;
 mod partition_generator;
 mod planning;
+mod planning_misc;
 mod predicates;
 mod workflow;
-mod planning_misc;
 
 fn main() {
-    
-    let mut g = graph::new(4);
-    g.add_edge(0, 1);
-    g.add_edge(0, 2);
-    g.add_edge(1, 3);
-    g.add_edge(2, 3);
-
+    // Read graph from a file
+    let mut g = match graph::from_file("graph.txt") {
+        Ok(graph) => graph,
+        Err(err) => {
+            eprintln!("Error reading the graph: {}", err);
+            return;
+        }
+    };
     g.print();
 
-    let mut generator = partition_generator::PartitionsGenerator::new(4);
+    // Read authentication sets
+    let auth_sets = match planning::read_auth_sets("auth_sets.txt") {
+        Ok(auth) => auth,
+        Err(err) => {
+            eprintln!("Error reading authentication sets: {}", err);
+            return;
+        }
+    };
 
-    while let Some(partition) = generator.next() {
-        println!("{:?}", partition);
+    // Read Separation of Duty and Binding of Duty constraints into predicates
+    let mut ui_preds = predicates::binary_predicates::default();
+
+    if let Err(err) = ui_preds.read_sod_from_file("sod.txt") {
+        eprintln!("Error reading SoD constraints: {}", err);
+        return;
+    }
+
+    if let Err(err) = ui_preds.read_bod_from_file("bod.txt") {
+        eprintln!("Error reading BoD constraints: {}", err);
+        return;
+    }
+
+    let mut ud_preds = predicates::binary_predicates::default();
+    let ud_scope = vec![3, 4, 5];
+    ud_preds.generate_k_different(ud_scope.clone(), 2);
+
+    let res = match plan_all(
+        &mut g,
+        &auth_sets,
+        &ud_preds,
+        &ud_scope,
+        &ui_preds,
+        &vec![1, 2, 3],
+        4,
+    ) {
+        Some(ans) => ans,
+        None => {
+            eprint!("No solutions here!");
+            return;
+        }
+    };
+
+    for v in res.iter() {
+        print!(" {}", v);
     }
 }

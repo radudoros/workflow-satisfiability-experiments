@@ -1,4 +1,3 @@
-
 pub struct PartitionsGenerator {
     pub a: Vec<usize>,
     pub b: Vec<usize>,
@@ -25,13 +24,13 @@ impl PartitionsGenerator {
             return None;
         }
 
-        if self.a[self.n-1] != self.m {
+        if self.a[self.n - 1] != self.m {
             // H3. [Increase an.]
-            self.a[self.n-1] += 1;
+            self.a[self.n - 1] += 1;
         } else {
             // H4. [Find j.]
             let mut j = self.n - 2;
-            while j != 0 && self.a[j] == self.b[j+1] {
+            while j != 0 && self.a[j] == self.b[j + 1] {
                 j -= 1;
             }
 
@@ -43,14 +42,14 @@ impl PartitionsGenerator {
                 self.a[j] += 1;
 
                 // H6. [Zero out aj+1 ... an.]
-                self.m = self.b[j+1] + if self.a[j] == self.b[j+1] { 1 } else { 0 };
+                self.m = self.b[j + 1] + if self.a[j] == self.b[j + 1] { 1 } else { 0 };
                 j += 1;
                 while j < self.n - 1 {
                     self.a[j] = 0;
-                    self.b[j+1] = self.m;
+                    self.b[j + 1] = self.m;
                     j += 1;
                 }
-                self.a[self.n-1] = 0;
+                self.a[self.n - 1] = 0;
             }
         }
 
@@ -98,16 +97,18 @@ mod tests {
 
     #[test]
     fn test_partitions_generator_bell() {
-        let bell_numbers = [1, 1, 2, 5, 15, 52, 203, 877, 4140, 21147, 115975, 678570, 4213597, 27644437, 190899322]; // and so on, for larger tests
+        let bell_numbers = [
+            1, 1, 2, 5, 15, 52, 203, 877, 4140, 21147, 115975, 678570, 4213597, 27644437, 190899322,
+        ]; // and so on, for larger tests
 
         for n in 0..bell_numbers.len() {
             let mut pg = PartitionsGenerator::new(n);
             let mut partition_count = 1;
-    
+
             while let Some(_) = pg.next() {
                 partition_count += 1;
             }
-    
+
             assert_eq!(partition_count, bell_numbers[n]);
         }
     }

@@ -45,7 +45,7 @@ impl<'a> BipartiteGraph<'a> {
         }
         result
     }
-    
+
     pub fn max_matching(&mut self) -> usize {
         let mut count = 0;
         for v in 0..self.m {
@@ -64,11 +64,7 @@ mod tests {
 
     #[test]
     fn test_small_matching() {
-        let adj = vec![
-            vec![0],
-            vec![1],
-            vec![2],
-        ];
+        let adj = vec![vec![0], vec![1], vec![2]];
         let alen = 3;
         let blen = 3;
         let mut bg = BipartiteGraph::new(&adj, alen, blen);
@@ -77,11 +73,7 @@ mod tests {
 
     #[test]
     fn test_disconnected_node() {
-        let adj = vec![
-            vec![1],
-            vec![2],
-            vec![],
-        ];
+        let adj = vec![vec![1], vec![2], vec![]];
         let alen = 3;
         let blen = 3;
         let mut bg = BipartiteGraph::new(&adj, alen, blen);
@@ -90,11 +82,7 @@ mod tests {
 
     #[test]
     fn test_multiple_edges() {
-        let adj = vec![
-            vec![1, 2],
-            vec![0, 2],
-            vec![0, 1],
-        ];
+        let adj = vec![vec![1, 2], vec![0, 2], vec![0, 1]];
         let alen = 3;
         let blen = 3;
         let mut bg = BipartiteGraph::new(&adj, alen, blen);
@@ -103,11 +91,7 @@ mod tests {
 
     #[test]
     fn test_no_edges() {
-        let adj: Vec<Vec<usize>> = vec![
-            vec![],
-            vec![],
-            vec![],
-        ];
+        let adj: Vec<Vec<usize>> = vec![vec![], vec![], vec![]];
         let alen = 3;
         let blen = 3;
         let mut bg = BipartiteGraph::new(&adj, alen, blen);
@@ -116,11 +100,7 @@ mod tests {
 
     #[test]
     fn test_large_matching() {
-        let adj = vec![
-            vec![0, 1, 2],
-            vec![3, 4, 5],
-            vec![6, 7, 8],
-        ];
+        let adj = vec![vec![0, 1, 2], vec![3, 4, 5], vec![6, 7, 8]];
         let alen = 3;
         let blen = 9;
         let mut bg = BipartiteGraph::new(&adj, alen, blen);
