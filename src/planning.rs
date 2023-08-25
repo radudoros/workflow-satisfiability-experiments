@@ -1,5 +1,6 @@
 use std::fs::File;
 use std::io::{BufRead, BufReader};
+use std::io::Cursor;
 
 pub mod planning {
     use crate::bipartite_matching::BipartiteGraph;
@@ -62,16 +63,23 @@ pub mod planning {
         ulen: usize,
     ) -> Option<Vec<usize>> {
         let mut generator = PartitionsGenerator::new(g.nodes_id.len());
+        let mut pattern_nodes: Vec<Vec<usize>> = vec![vec![]; g.nodes_id.len()];
 
         while let Some(partition) = generator.next() {
-            g.nodes_id = partition.iter().map(|&n| n as i32).collect();
+            for (index, &value) in partition.iter().enumerate() {
+                g.nodes_id[index] = value as i32;
+            }
+            // g.nodes_id = partition.iter().map(|&n| n as i32).collect();
             if !preds.eval(&g) {
                 continue;
             }
 
             let pattern_size = *partition.iter().max().unwrap_or(&0) + 1;
-            let mut pattern_nodes: Vec<Vec<usize>> = vec![vec![]; pattern_size];
 
+            pattern_nodes.resize_with(pattern_size, Vec::new);
+            for pattern in 0..pattern_size {
+                pattern_nodes[pattern].clear();
+            }
             // Map nodes to patterns
             for (node, &pattern) in partition.iter().enumerate() {
                 pattern_nodes[pattern].push(node);
@@ -104,6 +112,7 @@ pub mod planning {
         // TODO: we can actually restrict the items that the generator goes through by using auth set
 
         let mut g_clone = g.clone();
+        let mut auth_cpy = auth.clone();
         let mut generator = Generator::new(g, ulen as i32, genneral_preds, &general_nodes);
         while let Some(solution) = generator.next() {
             // 1. check first if the solution and the authentication sets intersect:
@@ -123,8 +132,11 @@ pub mod planning {
                 continue;
             }
 
+            if general_nodes.len() == g_clone.nodes_id.len() && ui_preds.len() == 0 {
+                return Some(solution.iter().map(|&x| x as usize).collect());
+            }
+
             // 2. Use the generated solutions in the authorization set:
-            let mut auth_cpy = auth.clone();
             for (index, label) in solution.iter().enumerate() {
                 if *label == -1 {
                     continue;
@@ -174,6 +186,41 @@ pub fn read_auth_sets(filename: &str) -> Result<Vec<Vec<usize>>, Box<dyn std::er
 
     Ok(auth_sets)
 }
+
+pub fn read_auth_sets1(filename: &str) -> Result<Vec<Vec<usize>>, Box<dyn std::error::Error>> {
+    let file = File::open(filename)?;
+    let reader = BufReader::new(file);
+    let mut lines = reader.lines();
+
+    // Skip the header lines about steps, users, and constraints
+    for _ in 0..3 {
+        lines.next();
+    }
+
+    // Convert user's authorization into a vector of authorized steps
+    let mut auth_sets = Vec::new();
+    for line in lines {
+        let auths = line?
+            .split(':')
+            .nth(1)
+            .ok_or("Malformed line")?
+            .trim()
+            .split_whitespace()
+            .enumerate()
+            .filter_map(|(index, value)| {
+                if value == "1" {
+                    Some(index)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        auth_sets.push(auths);
+    }
+
+    Ok(auth_sets)
+}
+
 
 #[cfg(test)]
 mod tests {

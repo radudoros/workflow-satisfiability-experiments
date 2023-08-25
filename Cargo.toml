@@ -5,4 +5,23 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[[bin]]
+name = "planner"
+path = "src/main.rs"
+
+[lib]
+path = "src/lib.rs"
+
+[[bench]]
+name = "my_benchmark"
+path = "benches/my_benchmark.rs"
+harness = false
+
+[profile.bench]
+debug = true
+
+
+[dev-dependencies]
+criterion = "0.5.1"
+
 [dependencies]
