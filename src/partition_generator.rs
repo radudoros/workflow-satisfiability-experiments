@@ -1,3 +1,54 @@
+pub struct IncrementalPartitionGenerator {
+    current_partition: Vec<usize>,
+    max_values: Vec<usize>,
+    target_length: usize,
+}
+
+impl IncrementalPartitionGenerator {
+    pub fn new(target_length: usize) -> Self {
+        Self {
+            current_partition: vec![0; 1],
+            max_values: vec![0; 1],
+            target_length,
+        }
+    }
+
+    pub fn next(&mut self) -> Option<&[usize]> {
+        // Return None if the current partition is empty
+        if self.current_partition.is_empty() {
+            return None;
+        }
+
+        if self.current_partition.len() == self.target_length {
+            // Try to increment the last element in the partition
+            while !self.current_partition.is_empty() {
+                let last_max_value = *self.max_values.last().unwrap();
+                let last_element = self.current_partition.last_mut().unwrap();
+
+                // Check if the last element can be incremented
+                if *last_element < last_max_value {
+                    *last_element += 1;
+                    return Some(&self.current_partition);
+                } else {
+                    self.current_partition.pop();
+                    self.max_values.pop();
+                }
+            }
+            return None;
+        } else {
+            // Append a new element to the partition
+            let next_max_value = std::cmp::max(
+                *self.current_partition.last().unwrap() + 1,
+                *self.max_values.last().unwrap(),
+            );
+
+            self.current_partition.push(0);
+            self.max_values.push(next_max_value);
+            return Some(&self.current_partition);
+        }
+    }
+}
+
 pub struct PartitionsGenerator {
     pub a: Vec<usize>,
     pub b: Vec<usize>,
@@ -111,5 +162,51 @@ mod tests {
 
             assert_eq!(partition_count, bell_numbers[n]);
         }
+    }
+
+
+    #[test]
+    fn test_incremental3() {
+        let mut gen = IncrementalPartitionGenerator::new(3);
+        
+        // The first value is assumed to be [0] by default
+        assert_eq!(gen.next(), Some(&[0, 0][..]));
+        assert_eq!(gen.next(), Some(&[0, 0, 0][..]));
+        assert_eq!(gen.next(), Some(&[0, 0, 1][..]));
+        assert_eq!(gen.next(), Some(&[0, 1][..]));
+        assert_eq!(gen.next(), Some(&[0, 1, 0][..]));
+        assert_eq!(gen.next(), Some(&[0, 1, 1][..]));
+        assert_eq!(gen.next(), Some(&[0, 1, 2][..]));
+        assert_eq!(gen.next(), None);
+    }
+
+    #[test]
+    fn test_incremental4() {
+        let mut gen = IncrementalPartitionGenerator::new(4);
+        
+        // The first value is assumed to be [0] by default
+        assert_eq!(gen.next(), Some(&[0, 0][..]));
+        assert_eq!(gen.next(), Some(&[0, 0, 0][..]));
+        assert_eq!(gen.next(), Some(&[0, 0, 0, 0][..]));
+        assert_eq!(gen.next(), Some(&[0, 0, 0, 1][..]));
+        assert_eq!(gen.next(), Some(&[0, 0, 1][..]));
+        assert_eq!(gen.next(), Some(&[0, 0, 1, 0][..]));
+        assert_eq!(gen.next(), Some(&[0, 0, 1, 1][..]));
+        assert_eq!(gen.next(), Some(&[0, 0, 1, 2][..]));
+        assert_eq!(gen.next(), Some(&[0, 1][..]));
+        assert_eq!(gen.next(), Some(&[0, 1, 0][..]));
+        assert_eq!(gen.next(), Some(&[0, 1, 0, 0][..]));
+        assert_eq!(gen.next(), Some(&[0, 1, 0, 1][..]));
+        assert_eq!(gen.next(), Some(&[0, 1, 0, 2][..]));
+        assert_eq!(gen.next(), Some(&[0, 1, 1][..]));
+        assert_eq!(gen.next(), Some(&[0, 1, 1, 0][..]));
+        assert_eq!(gen.next(), Some(&[0, 1, 1, 1][..]));
+        assert_eq!(gen.next(), Some(&[0, 1, 1, 2][..]));
+        assert_eq!(gen.next(), Some(&[0, 1, 2][..]));
+        assert_eq!(gen.next(), Some(&[0, 1, 2, 0][..]));
+        assert_eq!(gen.next(), Some(&[0, 1, 2, 1][..]));
+        assert_eq!(gen.next(), Some(&[0, 1, 2, 2][..]));
+        assert_eq!(gen.next(), Some(&[0, 1, 2, 3][..]));
+        assert_eq!(gen.next(), None);
     }
 }
