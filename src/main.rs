@@ -7,7 +7,9 @@ use planner::predicates::binary_predicates;
 use planner::workflow::graph;
 
 use std::io::Cursor;
-
+use std::fs::File;
+use std::io::{self, BufReader, BufRead};
+use std::path::Path;
 
 fn old_run() {
     // Read graph from a file
@@ -67,23 +69,6 @@ fn old_run() {
     }
 }
 
-
-fn naive_backtracking(g: &graph, bp: &binary_predicates, auth: &Vec<Vec<i32>>) {
-
-}
-
-fn combined_approach(g: &graph, bp: &binary_predicates, auth: &Vec<Vec<i32>>) {
-    // Implement the combined approach
-}
-
-// fn benchmark_naive_backtracking(c: &mut Criterion) {
-//     let input_data = /* prepare the input data */;
-//     c.bench_function("Naive Backtracking", |b| {
-//         b.iter(|| naive_backtracking(black_box(&input_data)))
-//     });
-// }
-
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -119,20 +104,31 @@ mod tests {
         // sod scope 6 7\n\
         // bod scope 8 9\n", step_size);
 
-        let step_size = 14;
+        let step_size = 20;
         let content = format!("#Steps: {}\n\
-        #Users: 3\n\
-        #Constraints: 6\n\
+        #Users: 7\n\
+        #Constraints: 12\n\
         Authorizations:\n\
-        user 1: 1 0 1 1 0 1 0 1 1 0 1 1 1 1\n\
-        user 2: 0 1 0 1 1 0 1 0 1 1 1 0 1 0\n\
-        user 3: 1 1 0 1 0 0 1 0 1 1 0 1 1 1\n\
+        user 1: 1 0 1 1 0 1 0 1 1 0 1 1 1 1 1 0 1 1 0 1\n\
+        user 2: 0 1 0 1 1 0 1 0 1 1 1 0 1 0 1 1 0 0 1 0\n\
+        user 3: 1 1 0 1 0 0 1 0 1 1 0 1 1 1 0 1 0 0 1 1\n\
+        user 4: 0 1 1 1 1 1 1 0 0 0 1 0 1 0 1 0 1 0 0 1\n\
+        user 5: 0 0 0 0 1 1 1 1 1 0 1 1 1 0 0 0 0 1 1 0\n\
+        user 6: 0 1 1 1 0 0 1 0 1 0 1 0 0 0 1 0 1 1 1 0\n\
+        user 7: 0 1 0 1 1 1 1 1 1 0 0 1 0 1 0 1 1 0 1 1\n\
         Constraints:\n\
+        sod scope 2 3\n\
         sod scope 1 2\n\
-        sod scope 0 1\n\
-        bod scope 2 3\n\
-        sod scope 6 7\n\
-        bod scope 8 9\n", step_size);
+        sod scope 1 9\n\
+        sod scope 1 10\n\
+        bod scope 1 11\n\
+        bod scope 3 4\n\
+        sod scope 7 8\n\
+        sod scope 11 12\n\
+        sod scope 12 13\n\
+        sod scope 14 15\n\
+        bod scope 13 15\n\
+        bod scope 9 10\n", step_size);
 
         let cursor = Cursor::new(content);
         let mut ui_preds = binary_predicates::default();
@@ -160,7 +156,7 @@ mod tests {
             &ud_scope,
             &ui_preds,
             &vec![1, 2, 3],
-            4,
+            7,
         ) {
             Some(ans) => ans,
             None => {
@@ -211,25 +207,15 @@ mod tests {
         user 2: 0 1 0 1 1 0 1 0 1 1 1 0 1 0\n\
         user 3: 1 1 0 1 0 0 1 0 1 1 0 1 1 1\n\
         Constraints:\n\
+        sod scope 2 3\n\
         sod scope 1 2\n\
-        sod scope 0 1\n\
-        bod scope 2 3\n\
-        sod scope 6 7\n\
-        bod scope 8 9\n", step_size);
+        bod scope 3 4\n\
+        sod scope 7 8\n\
+        bod scope 9 10\n", step_size);
 
         let cursor = Cursor::new(content);
         let mut ud_preds = binary_predicates::default();
         let mut auth_sets = ud_preds.read_constraints(cursor).unwrap();
-        auth_sets = (0..step_size)
-        .map(|step| {
-            auth_sets
-                .iter()
-                .enumerate()
-                .filter(|(_, users)| users[step] == 1)
-                .map(|(index, _)| index)
-                .collect()
-        })
-        .collect();
     
         let mut g = graph::new(step_size);
     
@@ -258,11 +244,45 @@ mod tests {
 
 
 fn main() {
+    let filename = "instance0.txt";
+    let path = Path::new(&filename);
+    let file = match File::open(&path) {
+        Err(why) => panic!("Couldn't open {}: {}", path.display(), why),
+        Ok(file) => file,
+    };
+    let reader = BufReader::new(file);
 
+
+    let mut ui_preds = binary_predicates::default();
+    let mut auth_sets = ui_preds.read_constraints(reader).unwrap();
+
+    let step_size = auth_sets.len();  // Assuming step_size is the length of auth_sets
+    let mut g = graph::new(step_size);
+
+    let ud_preds = binary_predicates::default();
+    let ud_scope = vec![1];
+
+    let res = match plan_all(
+        &mut g,
+        &auth_sets,
+        &ud_preds,
+        &ud_scope,
+        &ui_preds,
+        &vec![1, 2, 3],
+        90,
+    ) {
+        Some(ans) => ans,
+        None => {
+            eprintln!("No solutions found!");
+            return;
+        }
+    };
+
+    if res.is_empty() {
+        eprintln!("Result should not be empty");
+        return;
+    }
+
+    // Do something with the result
+    println!("Found a solution: {:?}", res);
 }
-
-// 0. Read the GDPR paper
-// 1. Generating (random or smart workset) policies
-// 2. Work a bit on the analytical prooving of the combination of the algorithms
-// 3. AST vs API/interface
-//  

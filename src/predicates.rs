@@ -59,7 +59,9 @@ impl binary_predicates {
         let _ = lines.next();
 
         // Read user authorizations
-        let mut auth_sets: Vec<Vec<usize>> = Vec::with_capacity(num_users);
+        let mut auth_sets: Vec<Vec<usize>> = vec![Vec::new(); num_steps];
+        // Read user authorizations by user
+        let mut temp_auth_sets: Vec<Vec<usize>> = Vec::with_capacity(num_users);
         for _ in 0..num_users {
             let line = lines.next().unwrap()?;
             let users: Vec<usize> = line
@@ -72,7 +74,16 @@ impl binary_predicates {
                 .collect();
 
             assert_eq!(users.len(), num_steps, "Mismatched authorization length");
-            auth_sets.push(users);
+            temp_auth_sets.push(users);
+        }
+
+        // Transpose to read by steps
+        for step in 0..num_steps {
+            for user in 0..num_users {
+                if temp_auth_sets[user][step] == 1 {
+                    auth_sets[step].push(user);
+                }
+            }
         }
 
         // Read the line that specifies "Constraints:"
@@ -84,24 +95,25 @@ impl binary_predicates {
             match parts.get(0).map(String::as_str) {
                 Some("sod") => {
                     // Get the node IDs from the third and fourth positions
-                    let x: usize = parts.get(2).and_then(|s| s.parse().ok()).unwrap_or(0);
-                    let y: usize = parts.get(3).and_then(|s| s.parse().ok()).unwrap_or(0);
-                    
+                    let x: usize = parts.get(2).and_then(|s| s.parse().ok()).unwrap_or(0) - 1;
+                    let y: usize = parts.get(3).and_then(|s| s.parse().ok()).unwrap_or(0) - 1;
+
                     self.preds.push(Box::new(move |g: &graph| g.nodes_id[x] == -1 || g.nodes_id[y] == -1 || g.nodes_id[x] != g.nodes_id[y]));
                     self.pred_loc.push(-1);
                 },
                 Some("bod") => {
                     // Get the node IDs from the third and fourth positions
-                    let x: usize = parts.get(2).and_then(|s| s.parse().ok()).unwrap_or(0);
-                    let y: usize = parts.get(3).and_then(|s| s.parse().ok()).unwrap_or(0);
-                    
+                    let x: usize = parts.get(2).and_then(|s| s.parse().ok()).unwrap_or(0) - 1;
+                    let y: usize = parts.get(3).and_then(|s| s.parse().ok()).unwrap_or(0) - 1;
+
                     self.preds.push(Box::new(move |g: &graph| g.nodes_id[x] == -1 || g.nodes_id[y] == -1 || g.nodes_id[x] == g.nodes_id[y]));
                     self.pred_loc.push(-1);
                 },
                 Some("at") if parts.get(1).map(String::as_str) == Some("most") => {
                     // Handle the "at most" constraint
                     let max_count: usize = parts.get(2).and_then(|s| s.parse().ok()).unwrap_or(0);
-                    let nodes: Vec<usize> = parts[4..].iter().filter_map(|s| s.parse().ok()).collect();
+                    let nodes: Vec<usize> = parts[4..].iter().filter_map(|s| s.parse::<usize>().ok().map(|x| x - 1)).collect();
+
                     self.preds.push(Box::new(move |g: &graph| {
                         let unique_ids: HashSet<_> = nodes.iter().map(|&node| g.nodes_id[node]).filter(|&id| id != -1).collect();
                         unique_ids.len() <= max_count
@@ -110,14 +122,14 @@ impl binary_predicates {
                 },
                 Some("assignment-dependent") => {
                     let scope_indices: Vec<usize> = vec![
-                        parts.get(2).and_then(|s| s.parse().ok()).unwrap_or(0),
-                        parts.get(3).and_then(|s| s.parse().ok()).unwrap_or(0),
+                        parts.get(2).and_then(|s| s.parse().ok()).unwrap_or(0) - 1,
+                        parts.get(3).and_then(|s| s.parse().ok()).unwrap_or(0) - 1,
                     ];
-            
+
                     let and_index = parts.iter().position(|s| s == "and").unwrap_or(0);
                     let users_set1: Vec<i32> = parts[5..and_index].iter().filter_map(|s| s.parse().ok()).collect();
                     let users_set2: Vec<i32> = parts[and_index + 1..].iter().filter_map(|s| s.parse().ok()).collect();
-            
+
                     self.preds.push(Box::new(move |g: &graph| {
                         let user1 = g.nodes_id[scope_indices[0]];
                         let user2 = g.nodes_id[scope_indices[1]];

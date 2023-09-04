@@ -20,33 +20,41 @@ impl IncrementalPartitionGenerator {
         }
 
         if self.current_partition.len() == self.target_length {
-            // Try to increment the last element in the partition
-            while !self.current_partition.is_empty() {
-                let last_max_value = *self.max_values.last().unwrap();
-                let last_element = self.current_partition.last_mut().unwrap();
-
-                // Check if the last element can be incremented
-                if *last_element < last_max_value {
-                    *last_element += 1;
-                    return Some(&self.current_partition);
-                } else {
-                    self.current_partition.pop();
-                    self.max_values.pop();
-                }
-            }
-            return None;
+            return self.inc_next();
         } else {
-            // Append a new element to the partition
-            let next_max_value = std::cmp::max(
-                *self.current_partition.last().unwrap() + 1,
-                *self.max_values.last().unwrap(),
-            );
-
-            self.current_partition.push(0);
-            self.max_values.push(next_max_value);
-            return Some(&self.current_partition);
+            return self.append_element();
         }
     }
+
+    // Increment the next possible element in the partition
+    pub fn inc_next(&mut self) -> Option<&[usize]> {
+        while !self.current_partition.is_empty() {
+            let last_max_value = *self.max_values.last().unwrap();
+            let last_element = self.current_partition.last_mut().unwrap();
+    
+            if *last_element < last_max_value {
+                *last_element += 1;
+                return Some(&self.current_partition);
+            } else {
+                self.current_partition.pop();
+                self.max_values.pop();
+            }
+        }
+        None
+    }
+
+    // Append a new element to the current_partition
+    fn append_element(&mut self) -> Option<&[usize]> {
+        let next_max_value = std::cmp::max(
+            *self.current_partition.last().unwrap() + 1,
+            *self.max_values.last().unwrap(),
+        );
+    
+        self.current_partition.push(0);
+        self.max_values.push(next_max_value);
+        Some(&self.current_partition)
+    }
+
 }
 
 pub struct PartitionsGenerator {

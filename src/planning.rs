@@ -1,10 +1,9 @@
 use std::fs::File;
 use std::io::{BufRead, BufReader};
-use std::io::Cursor;
 
 pub mod planning {
     use crate::bipartite_matching::BipartiteGraph;
-    use crate::partition_generator::PartitionsGenerator;
+    use crate::partition_generator::{PartitionsGenerator, IncrementalPartitionGenerator};
     use crate::planning_misc::planning_misc::Generator;
     use crate::predicates::binary_predicates;
     use crate::workflow::graph;
@@ -14,46 +13,122 @@ pub mod planning {
         auth: &Vec<Vec<usize>>,
         pattern_map: &Vec<Vec<usize>>,
         ulen: usize,
+        g: &mut graph
     ) -> Option<Vec<(usize, usize)>> {
-        // 1. make bipartite graph
+        // 1. Initialize bipartite graph
         let pattern_size = pattern_map.len();
         let n = pattern_size + ulen;
-        let mut g = graph::new(n);
 
+        // 2. Populate the bipartite graph based on frequencies
         for (bi, block) in pattern_map.iter().enumerate() {
-            let mut frequency: std::collections::HashMap<usize, usize> =
-                std::collections::HashMap::new();
-            // for each step in the block, count the users allowed
-            for s in block {
-                for authorized in &auth[*s as usize] {
-                    match frequency.get(&authorized) {
-                        Some(count) => {
-                            frequency.insert(*authorized, count + 1);
-                        }
-                        None => {
-                            frequency.insert(*authorized, 1);
-                        }
-                    }
+            // Initialize frequency vector for each user
+            let mut frequency = vec![0; ulen];  
+
+            // Count the frequency of each authorized user for each step in the block
+            for &s in block {
+                for &authorized in &auth[s] {
+                    frequency[authorized] += 1;
                 }
             }
 
-            let bsize = block.len();
+            // Add edges to the graph based on frequencies
+            let block_size = block.len();
+            g.adjacency_list[bi].clear();  // Clear existing adjacency list for this block
 
-            // frequencies of block size means that the node covers the full block:
-            frequency.retain(|_, cnt| *cnt == bsize);
-            for k in frequency.keys() {
-                g.add_edge(bi, k + pattern_size);
+            for (user_id, &freq) in frequency.iter().enumerate() {
+                if freq == block_size {
+                    g.add_edge(bi, user_id + pattern_size);
+                }
+            }
+
+            // Early exit: No valid edges for this block
+            if g.adjacency_list[bi].is_empty() {
+                return None;
             }
         }
 
+        // 3. Find maximum matching
         let mut bipartite_graph = BipartiteGraph::new(&g.adjacency_list, pattern_size, n);
         let mut found_matching = bipartite_graph.max_matching_set();
-
-        if found_matching.len() != pattern_size {
-            return None;
+    
+        // Return the matching if it covers the entire pattern
+        if found_matching.len() == pattern_size {
+            found_matching.sort_by(|a, b| a.0.cmp(&b.0));
+            return Some(found_matching);
         }
-        found_matching.sort_by(|a, b| a.0.cmp(&b.0));
-        return Some(found_matching);
+
+        None
+    }
+
+    pub fn plan_pattern_incremental(
+        graph: &mut graph,
+        authorizations: &Vec<Vec<usize>>,
+        predicates: &binary_predicates,
+        user_length: usize
+    ) -> Option<Vec<usize>> {
+
+        // Initialize incremental pattern generator and other variables
+        let pattern_length = graph.nodes_id.len();
+        let mut pattern_generator = IncrementalPartitionGenerator::new(pattern_length);
+        let mut pattern_nodes = vec![vec![]; pattern_length];
+        let assignment_graph_size = pattern_length + user_length;
+        let mut assignment_graph = graph::new(assignment_graph_size); // Assuming Graph is a struct type
+
+        // Loop over generated partitions
+        let mut next_partition = pattern_generator.next();
+        while let Some(partition) = next_partition {
+            // Step 1: Update the graph based on the new partition and evaluate predicates
+            update_graph_labels(graph, partition);
+    
+            if !predicates.eval(graph) {
+                next_partition = pattern_generator.inc_next();
+                continue;
+            }
+
+            // Step 2: Bipartite Matching
+            let pattern_size = build_assignment_graph(&mut pattern_nodes, partition);
+            if let Some(matching) = combine(authorizations, &pattern_nodes, user_length, &mut assignment_graph) {
+                if partition.len() == pattern_length {
+                    return Some(
+                        partition
+                            .iter()
+                            .map(|&n| matching[n].1 - pattern_size)
+                            .collect(),
+                    );
+                }
+
+                next_partition = pattern_generator.next();
+            } else {
+                next_partition = pattern_generator.inc_next();
+            }
+        }
+    
+        None
+    }
+
+    /// Update node labels in the graph based on the given partition.
+    fn update_graph_labels(graph: &mut graph, partition: &[usize]) {
+        for id in &mut graph.nodes_id {
+            *id = -1;
+        }
+        for (index, &value) in partition.iter().enumerate() {
+            graph.nodes_id[index] = value as i32;
+        }
+    }
+
+    pub fn build_assignment_graph(pattern_nodes: &mut Vec<Vec<usize>>, partition: &[usize]) -> usize {
+        let pattern_size = *partition.iter().max().unwrap_or(&0) + 1;
+
+        pattern_nodes.resize_with(pattern_size, Vec::new);
+        for pattern in 0..pattern_size {
+            pattern_nodes[pattern].clear();
+        }
+        // Map nodes to patterns
+        for (node, &pattern) in partition.iter().enumerate() {
+            pattern_nodes[pattern].push(node);
+        }
+
+        return pattern_size;
     }
 
     pub fn plan_pattern(
@@ -62,31 +137,25 @@ pub mod planning {
         preds: &binary_predicates,
         ulen: usize,
     ) -> Option<Vec<usize>> {
-        let mut generator = PartitionsGenerator::new(g.nodes_id.len());
         let mut pattern_nodes: Vec<Vec<usize>> = vec![vec![]; g.nodes_id.len()];
 
+        let assignment_graph_sz = g.nodes_id.len() + ulen;
+        let mut assignment_graph = graph::new(assignment_graph_sz);
+
+        let mut generator = PartitionsGenerator::new(g.nodes_id.len());
         while let Some(partition) = generator.next() {
             for (index, &value) in partition.iter().enumerate() {
                 g.nodes_id[index] = value as i32;
             }
-            // g.nodes_id = partition.iter().map(|&n| n as i32).collect();
+
             if !preds.eval(&g) {
                 continue;
             }
 
-            let pattern_size = *partition.iter().max().unwrap_or(&0) + 1;
-
-            pattern_nodes.resize_with(pattern_size, Vec::new);
-            for pattern in 0..pattern_size {
-                pattern_nodes[pattern].clear();
-            }
-            // Map nodes to patterns
-            for (node, &pattern) in partition.iter().enumerate() {
-                pattern_nodes[pattern].push(node);
-            }
+            let pattern_size = build_assignment_graph(&mut pattern_nodes, partition);
 
             // combine now:
-            let matching = combine(auth, &pattern_nodes, ulen);
+            let matching = combine(auth, &pattern_nodes, ulen, &mut assignment_graph);
             if let Some(matching) = matching {
                 return Some(
                     partition
@@ -146,7 +215,7 @@ pub mod planning {
             }
 
             // 3. Pattern plan:
-            let res = plan_pattern(&mut g_clone, &auth_cpy, ui_preds, ulen);
+            let res = plan_pattern_incremental(&mut g_clone, &auth_cpy, ui_preds, ulen);
             if res.is_some() {
                 return res;
             }
