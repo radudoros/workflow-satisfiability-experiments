@@ -62,6 +62,7 @@ pub mod planning {
 
     pub fn plan_pattern_incremental(
         graph: &mut graph,
+        node_priorities: &Vec<usize>,
         authorizations: &Vec<Vec<usize>>,
         predicates: &binary_predicates,
         user_length: usize
@@ -78,15 +79,17 @@ pub mod planning {
         let mut next_partition = pattern_generator.next();
         while let Some(partition) = next_partition {
             // Step 1: Update the graph based on the new partition and evaluate predicates
-            update_graph_labels(graph, partition);
-    
+            update_graph_labels(graph, partition, &node_priorities);
+            // update_graph_labels_no_prio(graph, partition);
+
             if !predicates.eval(graph) {
                 next_partition = pattern_generator.inc_next();
                 continue;
             }
 
             // Step 2: Bipartite Matching
-            let pattern_size = build_assignment_graph(&mut pattern_nodes, partition);
+            // let pattern_size = build_assignment_graph(&mut pattern_nodes, partition, node_priorities);
+            let pattern_size = build_assignment_graph_no_prio(&mut pattern_nodes, partition);
             if let Some(matching) = combine(authorizations, &pattern_nodes, user_length, &mut assignment_graph) {
                 if partition.len() == pattern_length {
                     return Some(
@@ -107,7 +110,17 @@ pub mod planning {
     }
 
     /// Update node labels in the graph based on the given partition.
-    fn update_graph_labels(graph: &mut graph, partition: &[usize]) {
+    fn update_graph_labels(graph: &mut graph, partition: &[usize], node_priorities: &[usize]) {
+        for id in &mut graph.nodes_id {
+            *id = -1;
+        }
+        for (index, &value) in partition.iter().enumerate() {
+            graph.nodes_id[node_priorities[index]] = value as i32;
+        }
+    }
+
+    /// Update node labels in the graph based on the given partition.
+    fn update_graph_labels_no_prio(graph: &mut graph, partition: &[usize]) {
         for id in &mut graph.nodes_id {
             *id = -1;
         }
@@ -116,7 +129,22 @@ pub mod planning {
         }
     }
 
-    pub fn build_assignment_graph(pattern_nodes: &mut Vec<Vec<usize>>, partition: &[usize]) -> usize {
+    pub fn build_assignment_graph(pattern_nodes: &mut Vec<Vec<usize>>, partition: &[usize], node_priorities: &[usize]) -> usize {
+        let pattern_size = *partition.iter().max().unwrap_or(&0) + 1;
+
+        pattern_nodes.resize_with(pattern_size, Vec::new);
+        for pattern in 0..pattern_size {
+            pattern_nodes[pattern].clear();
+        }
+        // Map nodes to patterns
+        for (node, &pattern) in partition.iter().enumerate() {
+            pattern_nodes[pattern].push(node_priorities[node]);
+        }
+
+        return pattern_size;
+    }
+
+    pub fn build_assignment_graph_no_prio(pattern_nodes: &mut Vec<Vec<usize>>, partition: &[usize]) -> usize {
         let pattern_size = *partition.iter().max().unwrap_or(&0) + 1;
 
         pattern_nodes.resize_with(pattern_size, Vec::new);
@@ -137,6 +165,9 @@ pub mod planning {
         preds: &binary_predicates,
         ulen: usize,
     ) -> Option<Vec<usize>> {
+        let pattern_length = g.nodes_id.len();
+        let node_priorities: Vec<usize> = (0..pattern_length).collect(); // [0, 1, 2, ..., k-1]
+
         let mut pattern_nodes: Vec<Vec<usize>> = vec![vec![]; g.nodes_id.len()];
 
         let assignment_graph_sz = g.nodes_id.len() + ulen;
@@ -152,7 +183,7 @@ pub mod planning {
                 continue;
             }
 
-            let pattern_size = build_assignment_graph(&mut pattern_nodes, partition);
+            let pattern_size = build_assignment_graph(&mut pattern_nodes, partition, &node_priorities);
 
             // combine now:
             let matching = combine(auth, &pattern_nodes, ulen, &mut assignment_graph);
@@ -171,6 +202,7 @@ pub mod planning {
 
     pub fn plan_all(
         g: &mut graph,
+        node_priorities: &Vec<usize>,
         auth: &Vec<Vec<usize>>,
         genneral_preds: &binary_predicates,
         general_nodes: &Vec<usize>,
@@ -215,7 +247,7 @@ pub mod planning {
             }
 
             // 3. Pattern plan:
-            let res = plan_pattern_incremental(&mut g_clone, &auth_cpy, ui_preds, ulen);
+            let res = plan_pattern_incremental(&mut g_clone, node_priorities, &auth_cpy, ui_preds, ulen);
             if res.is_some() {
                 return res;
             }
@@ -344,8 +376,12 @@ mod tests {
         // TOOD: currently unused
         let ui_nodes = &[0, 1, 2, 3];
 
+        let pattern_length = g.nodes_id.len();
+        let node_priorities: Vec<usize> = (0..pattern_length).collect(); // [0, 1, 2, ..., k-1]
+
         let result = planning::plan_all(
             &mut g,
+            &node_priorities,
             &auth,
             &general_preds,
             &general_nodes,

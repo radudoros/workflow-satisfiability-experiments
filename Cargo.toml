@@ -16,6 +16,8 @@ path = "src/lib.rs"
 name = "my_benchmark"
 path = "benches/my_benchmark.rs"
 harness = false
+opt-level = 3
+overflow-checks = false
 
 [profile.bench]
 debug = true

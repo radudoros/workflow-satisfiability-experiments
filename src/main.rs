@@ -48,8 +48,12 @@ fn old_run() {
     let ud_scope = vec![3, 4, 5];
     ud_preds.generate_k_different(ud_scope.clone(), 2);
 
+    let pattern_length = g.nodes_id.len();
+    let node_priorities: Vec<usize> = (0..pattern_length).collect(); // [0, 1, 2, ..., k-1]
+
     let res = match plan_all(
         &mut g,
+        &node_priorities,
         &auth_sets,
         &ud_preds,
         &ud_scope,
@@ -132,18 +136,11 @@ mod tests {
 
         let cursor = Cursor::new(content);
         let mut ui_preds = binary_predicates::default();
-        let mut auth_sets = ui_preds.read_constraints(cursor).unwrap();
-        auth_sets = (0..step_size)
-        .map(|step| {
-            auth_sets
-                .iter()
-                .enumerate()
-                .filter(|(_, users)| users[step] == 1)
-                .map(|(index, _)| index)
-                .collect()
-        })
-        .collect();
-    
+        let (auth_sets, node_priorities) = ui_preds.read_constraints(cursor).unwrap();
+
+        let mut node_indices: Vec<usize> = (0..node_priorities.len()).collect();
+        node_indices.sort_by_key(|&index| std::cmp::Reverse(node_priorities[index]));
+
         let mut g = graph::new(step_size);
     
         let ud_preds = binary_predicates::default();
@@ -151,6 +148,7 @@ mod tests {
     
         let res = match plan_all(
             &mut g,
+            &node_indices,
             &auth_sets,
             &ud_preds,
             &ud_scope,
@@ -215,7 +213,10 @@ mod tests {
 
         let cursor = Cursor::new(content);
         let mut ud_preds = binary_predicates::default();
-        let mut auth_sets = ud_preds.read_constraints(cursor).unwrap();
+        let (auth_sets, node_priorities) = ud_preds.read_constraints(cursor).unwrap();
+
+        let mut node_indices: Vec<usize> = (0..node_priorities.len()).collect();
+        node_indices.sort_by_key(|&index| std::cmp::Reverse(node_priorities[index]));
     
         let mut g = graph::new(step_size);
     
@@ -224,6 +225,7 @@ mod tests {
     
         let res = match plan_all(
             &mut g,
+            &node_indices,
             &auth_sets,
             &ud_preds,
             &ud_scope,
@@ -254,7 +256,10 @@ fn main() {
 
 
     let mut ui_preds = binary_predicates::default();
-    let mut auth_sets = ui_preds.read_constraints(reader).unwrap();
+    let (auth_sets, node_priorities) = ui_preds.read_constraints(reader).unwrap();
+
+    let mut node_indices: Vec<usize> = (0..node_priorities.len()).collect();
+    node_indices.sort_by_key(|&index| std::cmp::Reverse(node_priorities[index]));
 
     let step_size = auth_sets.len();  // Assuming step_size is the length of auth_sets
     let mut g = graph::new(step_size);
@@ -264,6 +269,7 @@ fn main() {
 
     let res = match plan_all(
         &mut g,
+        &node_indices,
         &auth_sets,
         &ud_preds,
         &ud_scope,

@@ -44,8 +44,7 @@ impl binary_predicates {
         true
     }
 
-    pub fn read_constraints<R: Read>(&mut self, reader: R) -> std::io::Result<(Vec<Vec<usize>>)> {
-        // let file = File::open(filename)?;
+    pub fn read_constraints<R: Read>(&mut self, reader: R) -> std::io::Result<(Vec<Vec<usize>>, Vec<usize>)> {
         let reader = BufReader::new(reader);
 
         let mut lines = reader.lines();
@@ -54,7 +53,9 @@ impl binary_predicates {
         let num_steps: usize = lines.next().unwrap()?.split_whitespace().nth(1).unwrap().parse().map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
         let num_users: usize = lines.next().unwrap()?.split_whitespace().nth(1).unwrap().parse().map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
         let _num_constraints: usize = lines.next().unwrap()?.split_whitespace().nth(1).unwrap().parse().map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-    
+
+        let mut step_predicate_counts = vec![0; num_steps];
+
         // Read the line that specifies "Authorizations:"
         let _ = lines.next();
 
@@ -62,6 +63,7 @@ impl binary_predicates {
         let mut auth_sets: Vec<Vec<usize>> = vec![Vec::new(); num_steps];
         // Read user authorizations by user
         let mut temp_auth_sets: Vec<Vec<usize>> = Vec::with_capacity(num_users);
+        let mut node_unauthorization_counts: Vec<usize> = vec![0; num_steps];
         for _ in 0..num_users {
             let line = lines.next().unwrap()?;
             let users: Vec<usize> = line
@@ -74,6 +76,12 @@ impl binary_predicates {
                 .collect();
 
             assert_eq!(users.len(), num_steps, "Mismatched authorization length");
+            // Update the node_authorization_counts based on the current user's authorizations
+            for (node, &authorization) in users.iter().enumerate() {
+                if authorization == 0 {
+                    node_unauthorization_counts[node] += 1;
+                }
+            }
             temp_auth_sets.push(users);
         }
 
@@ -98,6 +106,9 @@ impl binary_predicates {
                     let x: usize = parts.get(2).and_then(|s| s.parse().ok()).unwrap_or(0) - 1;
                     let y: usize = parts.get(3).and_then(|s| s.parse().ok()).unwrap_or(0) - 1;
 
+                    step_predicate_counts[x] += 1;
+                    step_predicate_counts[y] += 1;
+
                     self.preds.push(Box::new(move |g: &graph| g.nodes_id[x] == -1 || g.nodes_id[y] == -1 || g.nodes_id[x] != g.nodes_id[y]));
                     self.pred_loc.push(-1);
                 },
@@ -106,6 +117,9 @@ impl binary_predicates {
                     let x: usize = parts.get(2).and_then(|s| s.parse().ok()).unwrap_or(0) - 1;
                     let y: usize = parts.get(3).and_then(|s| s.parse().ok()).unwrap_or(0) - 1;
 
+                    step_predicate_counts[x] += 10;
+                    step_predicate_counts[y] += 10;
+
                     self.preds.push(Box::new(move |g: &graph| g.nodes_id[x] == -1 || g.nodes_id[y] == -1 || g.nodes_id[x] == g.nodes_id[y]));
                     self.pred_loc.push(-1);
                 },
@@ -113,6 +127,10 @@ impl binary_predicates {
                     // Handle the "at most" constraint
                     let max_count: usize = parts.get(2).and_then(|s| s.parse().ok()).unwrap_or(0);
                     let nodes: Vec<usize> = parts[4..].iter().filter_map(|s| s.parse::<usize>().ok().map(|x| x - 1)).collect();
+
+                    for &node in &nodes {
+                        step_predicate_counts[node] += 10;
+                    }
 
                     self.preds.push(Box::new(move |g: &graph| {
                         let unique_ids: HashSet<_> = nodes.iter().map(|&node| g.nodes_id[node]).filter(|&id| id != -1).collect();
@@ -129,6 +147,9 @@ impl binary_predicates {
                     let and_index = parts.iter().position(|s| s == "and").unwrap_or(0);
                     let users_set1: Vec<i32> = parts[5..and_index].iter().filter_map(|s| s.parse().ok()).collect();
                     let users_set2: Vec<i32> = parts[and_index + 1..].iter().filter_map(|s| s.parse().ok()).collect();
+
+                    step_predicate_counts[scope_indices[0]] += 1;
+                    step_predicate_counts[scope_indices[1]] += 1;
 
                     self.preds.push(Box::new(move |g: &graph| {
                         let user1 = g.nodes_id[scope_indices[0]];
@@ -147,7 +168,19 @@ impl binary_predicates {
             }
         }
 
-        Ok(auth_sets)
+        let mut node_priorities = vec![0; num_steps];
+        for node in 0..num_steps {    // Assign higher priority to nodes with lower authorization counts
+            // You can add weights here as needed
+            let authorization_weight = 0.5; // Adjust the weight as per your requirements
+            let predicate_weight = 2.5; // Adjust the weight as per your requirements
+
+            let authorization_priority = authorization_weight * node_unauthorization_counts[node] as f64;
+            let predicate_priority = predicate_weight * step_predicate_counts[node] as f64;
+
+            node_priorities[node] = (authorization_priority + predicate_priority) as usize;
+        }
+
+        Ok((auth_sets, node_priorities))
     }
 
     pub fn read_sod_from_file(&mut self, filename: &str) -> std::io::Result<()> {
@@ -367,12 +400,14 @@ mod tests {
 
         let cursor = Cursor::new(content);
         let mut binary_preds = binary_predicates::default();
-        let auth_sets = binary_preds.read_constraints(cursor).unwrap();
+        let (auth_sets, _) = binary_preds.read_constraints(cursor).unwrap();
 
-        assert_eq!(auth_sets.len(), 3);
-        assert_eq!(auth_sets[0], vec![0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1]);
-        assert_eq!(auth_sets[1], vec![0, 0, 1, 1, 0, 1, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 1]);
-        assert_eq!(auth_sets[2], vec![1, 1, 1, 0, 0, 1, 1, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0]);
+        assert_eq!(auth_sets.len(), 18);
+        assert_eq!(auth_sets[0], vec![2]);
+        assert_eq!(auth_sets[1], vec![2]);
+        assert_eq!(auth_sets[2], vec![1, 2]);
+        assert_eq!(auth_sets[16], vec![1]);
+
 
         // Add additional assertions here to verify the constraints (preds and pred_loc).
     }
