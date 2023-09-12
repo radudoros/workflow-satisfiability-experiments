@@ -55,7 +55,7 @@ fn benchmark_combined_approach(c: &mut Criterion) {
 
     let cursor = Cursor::new(content);
     let mut binary_preds = binary_predicates::default();
-    let (auth_sets, node_priorities) = binary_preds.read_constraints(cursor).unwrap();
+    let (auth_sets, node_priorities, ulen) = binary_preds.read_constraints(cursor).unwrap();
 
     let mut node_indices: Vec<usize> = (0..node_priorities.len()).collect();
     node_indices.sort_by_key(|&index| std::cmp::Reverse(node_priorities[index]));
@@ -70,7 +70,7 @@ fn benchmark_combined_approach(c: &mut Criterion) {
             let auth_sets = black_box(&auth_sets);
 
             let ud_preds = binary_predicates::default();
-            let ud_scope = vec![1];
+            let ud_scope = vec![];
 
             let _res = match plan_all(
                 &mut g,
@@ -80,7 +80,7 @@ fn benchmark_combined_approach(c: &mut Criterion) {
                 &ud_scope,
                 &ui_preds,
                 &vec![1, 2, 3, 4, 5],
-                7,
+                ulen,
             ) {
                 Some(ans) => ans,
                 None => {
@@ -125,13 +125,13 @@ fn benchmark_combined_approach(c: &mut Criterion) {
 
 fn benchmark_from_file(c: &mut Criterion) {
     // Setup code here
-    let filename = "instance0.txt";
+    let filename = "instance99.txt";
     let path = Path::new(&filename);
     let file = File::open(&path).expect("Couldn't open file");
     let reader = BufReader::new(file);
 
     let mut ui_preds = binary_predicates::default();
-    let (auth_sets, node_priorities) = ui_preds.read_constraints(reader).unwrap();
+    let (auth_sets, node_priorities, ulen) = ui_preds.read_constraints(reader).unwrap();
     
     let mut node_indices: Vec<usize> = (0..node_priorities.len()).collect();
     node_indices.sort_by_key(|&index| std::cmp::Reverse(node_priorities[index]));
@@ -139,7 +139,10 @@ fn benchmark_from_file(c: &mut Criterion) {
     let step_size = auth_sets.len();
     let g = graph::new(step_size); // moved to setup
 
-    c.bench_function("Benchmark From File", |b| {
+    let mut group = c.benchmark_group("UI Group");
+    group.sample_size(10);
+
+    group.bench_function("Benchmark From File", |b| {
         b.iter(|| {
             // Only the code to benchmark
             let mut g = g.clone(); // Clone the original graph for each iteration
@@ -150,7 +153,7 @@ fn benchmark_from_file(c: &mut Criterion) {
             let node_indices = black_box(&node_indices);
 
             let ud_preds = binary_predicates::default();
-            let ud_scope = vec![1];
+            let ud_scope = vec![];
 
             let _res = match plan_all(
                 g,
@@ -160,7 +163,7 @@ fn benchmark_from_file(c: &mut Criterion) {
                 &ud_scope,
                 ui_preds,
                 &vec![1, 2, 3, 4, 5],
-                90,
+                ulen,
             ) {
                 Some(ans) => ans,
                 None => {
@@ -170,6 +173,8 @@ fn benchmark_from_file(c: &mut Criterion) {
             };
         })
     });
+
+    group.finish();
 }
 
 

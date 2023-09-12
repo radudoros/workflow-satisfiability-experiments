@@ -73,14 +73,13 @@ pub mod planning {
         let mut pattern_generator = IncrementalPartitionGenerator::new(pattern_length);
         let mut pattern_nodes = vec![vec![]; pattern_length];
         let assignment_graph_size = pattern_length + user_length;
-        let mut assignment_graph = graph::new(assignment_graph_size); // Assuming Graph is a struct type
+        let mut assignment_graph = graph::new(assignment_graph_size);
 
         // Loop over generated partitions
         let mut next_partition = pattern_generator.next();
         while let Some(partition) = next_partition {
             // Step 1: Update the graph based on the new partition and evaluate predicates
             update_graph_labels(graph, partition, &node_priorities);
-            // update_graph_labels_no_prio(graph, partition);
 
             if !predicates.eval(graph) {
                 next_partition = pattern_generator.inc_next();
@@ -88,8 +87,7 @@ pub mod planning {
             }
 
             // Step 2: Bipartite Matching
-            // let pattern_size = build_assignment_graph(&mut pattern_nodes, partition, node_priorities);
-            let pattern_size = build_assignment_graph_no_prio(&mut pattern_nodes, partition);
+            let pattern_size = build_assignment_graph(&mut pattern_nodes, partition, node_priorities);
             if let Some(matching) = combine(authorizations, &pattern_nodes, user_length, &mut assignment_graph) {
                 if partition.len() == pattern_length {
                     return Some(
@@ -210,7 +208,9 @@ pub mod planning {
         _ui_nodes: &[usize],
         ulen: usize,
     ) -> Option<Vec<usize>> {
-        // TODO: we can actually restrict the items that the generator goes through by using auth set
+        if general_nodes.is_empty() {
+            return plan_pattern_incremental(g, node_priorities, &auth, ui_preds, ulen);
+        }
 
         let mut g_clone = g.clone();
         let mut auth_cpy = auth.clone();

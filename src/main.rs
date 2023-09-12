@@ -136,7 +136,7 @@ mod tests {
 
         let cursor = Cursor::new(content);
         let mut ui_preds = binary_predicates::default();
-        let (auth_sets, node_priorities) = ui_preds.read_constraints(cursor).unwrap();
+        let (auth_sets, node_priorities, ulen) = ui_preds.read_constraints(cursor).unwrap();
 
         let mut node_indices: Vec<usize> = (0..node_priorities.len()).collect();
         node_indices.sort_by_key(|&index| std::cmp::Reverse(node_priorities[index]));
@@ -154,7 +154,7 @@ mod tests {
             &ud_scope,
             &ui_preds,
             &vec![1, 2, 3],
-            7,
+            ulen,
         ) {
             Some(ans) => ans,
             None => {
@@ -213,7 +213,7 @@ mod tests {
 
         let cursor = Cursor::new(content);
         let mut ud_preds = binary_predicates::default();
-        let (auth_sets, node_priorities) = ud_preds.read_constraints(cursor).unwrap();
+        let (auth_sets, node_priorities, ulen) = ud_preds.read_constraints(cursor).unwrap();
 
         let mut node_indices: Vec<usize> = (0..node_priorities.len()).collect();
         node_indices.sort_by_key(|&index| std::cmp::Reverse(node_priorities[index]));
@@ -231,7 +231,7 @@ mod tests {
             &ud_scope,
             &ui_preds,
             &vec![1, 2, 3],
-            3,
+            ulen,
         ) {
             Some(ans) => ans,
             None => {
@@ -246,7 +246,7 @@ mod tests {
 
 
 fn main() {
-    let filename = "instance0.txt";
+    let filename = "instance99.txt";
     let path = Path::new(&filename);
     let file = match File::open(&path) {
         Err(why) => panic!("Couldn't open {}: {}", path.display(), why),
@@ -256,7 +256,7 @@ fn main() {
 
 
     let mut ui_preds = binary_predicates::default();
-    let (auth_sets, node_priorities) = ui_preds.read_constraints(reader).unwrap();
+    let (auth_sets, node_priorities, ulen) = ui_preds.read_constraints(reader).unwrap();
 
     let mut node_indices: Vec<usize> = (0..node_priorities.len()).collect();
     node_indices.sort_by_key(|&index| std::cmp::Reverse(node_priorities[index]));
@@ -265,7 +265,7 @@ fn main() {
     let mut g = graph::new(step_size);
 
     let ud_preds = binary_predicates::default();
-    let ud_scope = vec![1];
+    let ud_scope = vec![];
 
     let res = match plan_all(
         &mut g,
@@ -275,7 +275,7 @@ fn main() {
         &ud_scope,
         &ui_preds,
         &vec![1, 2, 3],
-        90,
+        ulen,
     ) {
         Some(ans) => ans,
         None => {

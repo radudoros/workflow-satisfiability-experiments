@@ -1,7 +1,8 @@
 use crate::workflow::graph;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Read};
-use std::collections::HashSet;
+use std::rc::Rc;
+use std::cell::RefCell;
 
 type binary_pred = dyn Fn(&graph) -> bool;
 type weight_pred = dyn Fn(&graph) -> f64;
@@ -44,7 +45,7 @@ impl binary_predicates {
         true
     }
 
-    pub fn read_constraints<R: Read>(&mut self, reader: R) -> std::io::Result<(Vec<Vec<usize>>, Vec<usize>)> {
+    pub fn read_constraints<R: Read>(&mut self, reader: R) -> std::io::Result<(Vec<Vec<usize>>, Vec<usize>, usize)> {
         let reader = BufReader::new(reader);
 
         let mut lines = reader.lines();
@@ -132,9 +133,23 @@ impl binary_predicates {
                         step_predicate_counts[node] += 10;
                     }
 
+                    // Hack, preallocate and capture it in the closure
+                    let shared_vec = Rc::new(RefCell::new(Vec::with_capacity(max_count)));
+
                     self.preds.push(Box::new(move |g: &graph| {
-                        let unique_ids: HashSet<_> = nodes.iter().map(|&node| g.nodes_id[node]).filter(|&id| id != -1).collect();
-                        unique_ids.len() <= max_count
+                        let mut unique_ids = shared_vec.borrow_mut();
+                        unique_ids.clear();
+
+                        for &node in &nodes {
+                            let id = g.nodes_id[node];
+                            if id != -1 && !unique_ids.contains(&id) {
+                                unique_ids.push(id);
+                                if unique_ids.len() > max_count {
+                                    return false;
+                                } 
+                            }
+                        }
+                        true
                     }));
                     self.pred_loc.push(-1);
                 },
@@ -180,7 +195,7 @@ impl binary_predicates {
             node_priorities[node] = (authorization_priority + predicate_priority) as usize;
         }
 
-        Ok((auth_sets, node_priorities))
+        Ok((auth_sets, node_priorities, num_users))
     }
 
     pub fn read_sod_from_file(&mut self, filename: &str) -> std::io::Result<()> {
@@ -400,7 +415,7 @@ mod tests {
 
         let cursor = Cursor::new(content);
         let mut binary_preds = binary_predicates::default();
-        let (auth_sets, _) = binary_preds.read_constraints(cursor).unwrap();
+        let (auth_sets, _, _) = binary_preds.read_constraints(cursor).unwrap();
 
         assert_eq!(auth_sets.len(), 18);
         assert_eq!(auth_sets[0], vec![2]);
