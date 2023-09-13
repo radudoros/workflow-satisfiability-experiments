@@ -3,7 +3,7 @@ use std::io::{BufRead, BufReader};
 
 pub mod planning {
     use crate::bipartite_matching::BipartiteGraph;
-    use crate::partition_generator::{PartitionsGenerator, IncrementalPartitionGenerator};
+    use crate::partition_generator::{IncrementalPartitionGenerator, PartitionsGenerator};
     use crate::planning_misc::planning_misc::Generator;
     use crate::predicates::binary_predicates;
     use crate::workflow::graph;
@@ -13,7 +13,7 @@ pub mod planning {
         auth: &Vec<Vec<usize>>,
         pattern_map: &Vec<Vec<usize>>,
         ulen: usize,
-        g: &mut graph
+        g: &mut graph,
     ) -> Option<Vec<(usize, usize)>> {
         // 1. Initialize bipartite graph
         let pattern_size = pattern_map.len();
@@ -22,7 +22,7 @@ pub mod planning {
         // 2. Populate the bipartite graph based on frequencies
         for (bi, block) in pattern_map.iter().enumerate() {
             // Initialize frequency vector for each user
-            let mut frequency = vec![0; ulen];  
+            let mut frequency = vec![0; ulen];
 
             // Count the frequency of each authorized user for each step in the block
             for &s in block {
@@ -33,7 +33,7 @@ pub mod planning {
 
             // Add edges to the graph based on frequencies
             let block_size = block.len();
-            g.adjacency_list[bi].clear();  // Clear existing adjacency list for this block
+            g.adjacency_list[bi].clear(); // Clear existing adjacency list for this block
 
             for (user_id, &freq) in frequency.iter().enumerate() {
                 if freq == block_size {
@@ -50,7 +50,7 @@ pub mod planning {
         // 3. Find maximum matching
         let mut bipartite_graph = BipartiteGraph::new(&g.adjacency_list, pattern_size, n);
         let mut found_matching = bipartite_graph.max_matching_set();
-    
+
         // Return the matching if it covers the entire pattern
         if found_matching.len() == pattern_size {
             found_matching.sort_by(|a, b| a.0.cmp(&b.0));
@@ -65,9 +65,8 @@ pub mod planning {
         node_priorities: &Vec<usize>,
         authorizations: &Vec<Vec<usize>>,
         predicates: &binary_predicates,
-        user_length: usize
+        user_length: usize,
     ) -> Option<Vec<usize>> {
-
         // Initialize incremental pattern generator and other variables
         let pattern_length = graph.nodes_id.len();
         let mut pattern_generator = IncrementalPartitionGenerator::new(pattern_length);
@@ -87,8 +86,14 @@ pub mod planning {
             }
 
             // Step 2: Bipartite Matching
-            let pattern_size = build_assignment_graph(&mut pattern_nodes, partition, node_priorities);
-            if let Some(matching) = combine(authorizations, &pattern_nodes, user_length, &mut assignment_graph) {
+            let pattern_size =
+                build_assignment_graph(&mut pattern_nodes, partition, node_priorities);
+            if let Some(matching) = combine(
+                authorizations,
+                &pattern_nodes,
+                user_length,
+                &mut assignment_graph,
+            ) {
                 if partition.len() == pattern_length {
                     return Some(
                         partition
@@ -103,7 +108,7 @@ pub mod planning {
                 next_partition = pattern_generator.inc_next();
             }
         }
-    
+
         None
     }
 
@@ -127,7 +132,11 @@ pub mod planning {
         }
     }
 
-    pub fn build_assignment_graph(pattern_nodes: &mut Vec<Vec<usize>>, partition: &[usize], node_priorities: &[usize]) -> usize {
+    pub fn build_assignment_graph(
+        pattern_nodes: &mut Vec<Vec<usize>>,
+        partition: &[usize],
+        node_priorities: &[usize],
+    ) -> usize {
         let pattern_size = *partition.iter().max().unwrap_or(&0) + 1;
 
         pattern_nodes.resize_with(pattern_size, Vec::new);
@@ -142,7 +151,10 @@ pub mod planning {
         return pattern_size;
     }
 
-    pub fn build_assignment_graph_no_prio(pattern_nodes: &mut Vec<Vec<usize>>, partition: &[usize]) -> usize {
+    pub fn build_assignment_graph_no_prio(
+        pattern_nodes: &mut Vec<Vec<usize>>,
+        partition: &[usize],
+    ) -> usize {
         let pattern_size = *partition.iter().max().unwrap_or(&0) + 1;
 
         pattern_nodes.resize_with(pattern_size, Vec::new);
@@ -181,7 +193,8 @@ pub mod planning {
                 continue;
             }
 
-            let pattern_size = build_assignment_graph(&mut pattern_nodes, partition, &node_priorities);
+            let pattern_size =
+                build_assignment_graph(&mut pattern_nodes, partition, &node_priorities);
 
             // combine now:
             let matching = combine(auth, &pattern_nodes, ulen, &mut assignment_graph);
@@ -214,7 +227,18 @@ pub mod planning {
 
         let mut g_clone = g.clone();
         let mut auth_cpy = auth.clone();
-        let mut generator = Generator::new(g, ulen as i32, genneral_preds, &general_nodes);
+
+        let auth_i32: Vec<Vec<i32>> = auth
+            .iter()
+            .map(|inner_vec| {
+                inner_vec
+                    .iter()
+                    .map(|&num| num as i32)
+                    .collect::<Vec<i32>>()
+            })
+            .collect();
+
+        let mut generator = Generator::new(g, ulen, genneral_preds, &general_nodes, auth_i32);
         while let Some(solution) = generator.next() {
             // 1. check first if the solution and the authentication sets intersect:
             let mut ok = true;
@@ -247,7 +271,8 @@ pub mod planning {
             }
 
             // 3. Pattern plan:
-            let res = plan_pattern_incremental(&mut g_clone, node_priorities, &auth_cpy, ui_preds, ulen);
+            let res =
+                plan_pattern_incremental(&mut g_clone, node_priorities, &auth_cpy, ui_preds, ulen);
             if res.is_some() {
                 return res;
             }
@@ -308,20 +333,21 @@ pub fn read_auth_sets1(filename: &str) -> Result<Vec<Vec<usize>>, Box<dyn std::e
             .trim()
             .split_whitespace()
             .enumerate()
-            .filter_map(|(index, value)| {
-                if value == "1" {
-                    Some(index)
-                } else {
-                    None
-                }
-            })
+            .filter_map(
+                |(index, value)| {
+                    if value == "1" {
+                        Some(index)
+                    } else {
+                        None
+                    }
+                },
+            )
             .collect();
         auth_sets.push(auths);
     }
 
     Ok(auth_sets)
 }
-
 
 #[cfg(test)]
 mod tests {

@@ -4,51 +4,56 @@ pub mod planning_misc {
 
     pub struct Generator<'a> {
         g: &'a mut graph,
-        node_option_size: i32,
+        node_option_size: usize,
         preds: &'a binary_predicates,
         selected_nodes: &'a Vec<usize>,
+        auth_set_indices: Vec<i32>,
+        auth_sets: Vec<Vec<i32>>,
         current_index: Option<usize>,
     }
 
     impl<'a> Generator<'a> {
         pub fn new(
             g: &'a mut graph,
-            node_option_size: i32,
+            node_option_size: usize,
             preds: &'a binary_predicates,
             selected_nodes: &'a Vec<usize>,
+            auth_sets: Vec<Vec<i32>>,
         ) -> Self {
+            let len = g.nodes_id.len();
             Self {
                 g,
                 node_option_size,
                 preds,
                 selected_nodes,
+                auth_set_indices: vec![-1; len],
+                auth_sets,
                 current_index: Some(0),
             }
         }
 
         pub fn next(&mut self) -> Option<&[i32]> {
-            while self.current_index.is_some() {
-                if self.current_index.unwrap() == self.selected_nodes.len() {
-                    if let Some(index) = self.current_index {
-                        self.current_index = if index == 0 { None } else { Some(index - 1) };
-                    }
+            while let Some(index) = self.current_index {
+                if index == self.selected_nodes.len() {
+                    self.current_index = Some(index - 1);
                     return Some(&self.g.nodes_id);
                 }
 
-                let current_node_index = self.selected_nodes[self.current_index.unwrap()];
-                self.g.nodes_id[current_node_index] += 1;
-                if self.g.nodes_id[current_node_index] >= self.node_option_size {
+                let current_node_index = self.selected_nodes[index];
+                self.auth_set_indices[current_node_index] += 1;
+                let auth_len = self.auth_sets[current_node_index].len() as i32;
+                if self.auth_set_indices[current_node_index] >= auth_len {
                     self.g.nodes_id[current_node_index] = -1;
-                    if let Some(index) = self.current_index {
-                        self.current_index = if index == 0 { None } else { Some(index - 1) };
-                    }
+                    self.auth_set_indices[current_node_index] = -1;
+                    self.current_index = if index == 0 { None } else { Some(index - 1) };
                     continue;
                 }
 
+                self.g.nodes_id[current_node_index] =
+                    self.auth_set_indices[current_node_index] as i32;
+
                 if self.preds.eval(&self.g) {
-                    if let Some(index) = self.current_index {
-                        self.current_index = Some(index + 1);
-                    }
+                    self.current_index = Some(index + 1);
                 }
             }
 
@@ -207,8 +212,16 @@ mod tests {
         let preds = generate_mock_ud_predicates();
         let selected_nodes = vec![0, 1, 2, 3];
 
-        let mut generator =
-            Generator::new(&mut g, node_options.len() as i32, &preds, &selected_nodes);
+        let single_auth_set: Vec<i32> = (0..node_options.len()).map(|x| x as i32).collect();
+        let auth_sets: Vec<Vec<i32>> = vec![single_auth_set.clone(); selected_nodes.len()];
+
+        let mut generator = Generator::new(
+            &mut g,
+            node_options.len(),
+            &preds,
+            &selected_nodes,
+            auth_sets,
+        );
         let mut cnt: usize = 0;
         while let Some(_solution) = generator.next() {
             cnt += 1;

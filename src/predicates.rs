@@ -1,8 +1,8 @@
 use crate::workflow::graph;
+use std::cell::RefCell;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Read};
 use std::rc::Rc;
-use std::cell::RefCell;
 
 type binary_pred = dyn Fn(&graph) -> bool;
 type weight_pred = dyn Fn(&graph) -> f64;
@@ -45,15 +45,39 @@ impl binary_predicates {
         true
     }
 
-    pub fn read_constraints<R: Read>(&mut self, reader: R) -> std::io::Result<(Vec<Vec<usize>>, Vec<usize>, usize)> {
+    pub fn read_constraints<R: Read>(
+        &mut self,
+        reader: R,
+    ) -> std::io::Result<(Vec<Vec<usize>>, Vec<usize>, usize)> {
         let reader = BufReader::new(reader);
 
         let mut lines = reader.lines();
 
         // Read the number of steps, users, and constraints
-        let num_steps: usize = lines.next().unwrap()?.split_whitespace().nth(1).unwrap().parse().map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-        let num_users: usize = lines.next().unwrap()?.split_whitespace().nth(1).unwrap().parse().map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-        let _num_constraints: usize = lines.next().unwrap()?.split_whitespace().nth(1).unwrap().parse().map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        let num_steps: usize = lines
+            .next()
+            .unwrap()?
+            .split_whitespace()
+            .nth(1)
+            .unwrap()
+            .parse()
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        let num_users: usize = lines
+            .next()
+            .unwrap()?
+            .split_whitespace()
+            .nth(1)
+            .unwrap()
+            .parse()
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        let _num_constraints: usize = lines
+            .next()
+            .unwrap()?
+            .split_whitespace()
+            .nth(1)
+            .unwrap()
+            .parse()
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
 
         let mut step_predicate_counts = vec![0; num_steps];
 
@@ -97,7 +121,7 @@ impl binary_predicates {
 
         // Read the line that specifies "Constraints:"
         let _ = lines.next();
-        
+
         for line in lines {
             let parts: Vec<String> = line?.trim().split_whitespace().map(String::from).collect();
 
@@ -110,9 +134,11 @@ impl binary_predicates {
                     step_predicate_counts[x] += 1;
                     step_predicate_counts[y] += 1;
 
-                    self.preds.push(Box::new(move |g: &graph| g.nodes_id[x] == -1 || g.nodes_id[y] == -1 || g.nodes_id[x] != g.nodes_id[y]));
+                    self.preds.push(Box::new(move |g: &graph| {
+                        g.nodes_id[x] == -1 || g.nodes_id[y] == -1 || g.nodes_id[x] != g.nodes_id[y]
+                    }));
                     self.pred_loc.push(-1);
-                },
+                }
                 Some("bod") => {
                     // Get the node IDs from the third and fourth positions
                     let x: usize = parts.get(2).and_then(|s| s.parse().ok()).unwrap_or(0) - 1;
@@ -121,13 +147,18 @@ impl binary_predicates {
                     step_predicate_counts[x] += 10;
                     step_predicate_counts[y] += 10;
 
-                    self.preds.push(Box::new(move |g: &graph| g.nodes_id[x] == -1 || g.nodes_id[y] == -1 || g.nodes_id[x] == g.nodes_id[y]));
+                    self.preds.push(Box::new(move |g: &graph| {
+                        g.nodes_id[x] == -1 || g.nodes_id[y] == -1 || g.nodes_id[x] == g.nodes_id[y]
+                    }));
                     self.pred_loc.push(-1);
-                },
+                }
                 Some("at") if parts.get(1).map(String::as_str) == Some("most") => {
                     // Handle the "at most" constraint
                     let max_count: usize = parts.get(2).and_then(|s| s.parse().ok()).unwrap_or(0);
-                    let nodes: Vec<usize> = parts[4..].iter().filter_map(|s| s.parse::<usize>().ok().map(|x| x - 1)).collect();
+                    let nodes: Vec<usize> = parts[4..]
+                        .iter()
+                        .filter_map(|s| s.parse::<usize>().ok().map(|x| x - 1))
+                        .collect();
 
                     for &node in &nodes {
                         step_predicate_counts[node] += 10;
@@ -146,13 +177,13 @@ impl binary_predicates {
                                 unique_ids.push(id);
                                 if unique_ids.len() > max_count {
                                     return false;
-                                } 
+                                }
                             }
                         }
                         true
                     }));
                     self.pred_loc.push(-1);
-                },
+                }
                 Some("assignment-dependent") => {
                     let scope_indices: Vec<usize> = vec![
                         parts.get(2).and_then(|s| s.parse().ok()).unwrap_or(0) - 1,
@@ -160,8 +191,14 @@ impl binary_predicates {
                     ];
 
                     let and_index = parts.iter().position(|s| s == "and").unwrap_or(0);
-                    let users_set1: Vec<i32> = parts[5..and_index].iter().filter_map(|s| s.parse().ok()).collect();
-                    let users_set2: Vec<i32> = parts[and_index + 1..].iter().filter_map(|s| s.parse().ok()).collect();
+                    let users_set1: Vec<i32> = parts[5..and_index]
+                        .iter()
+                        .filter_map(|s| s.parse().ok())
+                        .collect();
+                    let users_set2: Vec<i32> = parts[and_index + 1..]
+                        .iter()
+                        .filter_map(|s| s.parse().ok())
+                        .collect();
 
                     step_predicate_counts[scope_indices[0]] += 1;
                     step_predicate_counts[scope_indices[1]] += 1;
@@ -169,27 +206,31 @@ impl binary_predicates {
                     self.preds.push(Box::new(move |g: &graph| {
                         let user1 = g.nodes_id[scope_indices[0]];
                         let user2 = g.nodes_id[scope_indices[1]];
-                        user1 == -1 || user2 == -1 || !users_set1.contains(&user1)
+                        user1 == -1
+                            || user2 == -1
+                            || !users_set1.contains(&user1)
                             || (users_set1.contains(&user1) && users_set2.contains(&user2))
                     }));
                     self.pred_loc.push(-1);
-                },
+                }
                 // Add other predicates as needed
                 // ...
                 _ => {
                     // Unknown predicate or line format
                     // Handle as necessary, e.g., log a warning or continue to the next line
-                },
+                }
             }
         }
 
         let mut node_priorities = vec![0; num_steps];
-        for node in 0..num_steps {    // Assign higher priority to nodes with lower authorization counts
+        for node in 0..num_steps {
+            // Assign higher priority to nodes with lower authorization counts
             // You can add weights here as needed
             let authorization_weight = 0.5; // Adjust the weight as per your requirements
             let predicate_weight = 2.5; // Adjust the weight as per your requirements
 
-            let authorization_priority = authorization_weight * node_unauthorization_counts[node] as f64;
+            let authorization_priority =
+                authorization_weight * node_unauthorization_counts[node] as f64;
             let predicate_priority = predicate_weight * step_predicate_counts[node] as f64;
 
             node_priorities[node] = (authorization_priority + predicate_priority) as usize;
@@ -422,7 +463,6 @@ mod tests {
         assert_eq!(auth_sets[1], vec![2]);
         assert_eq!(auth_sets[2], vec![1, 2]);
         assert_eq!(auth_sets[16], vec![1]);
-
 
         // Add additional assertions here to verify the constraints (preds and pred_loc).
     }

@@ -31,7 +31,7 @@ impl IncrementalPartitionGenerator {
         while !self.current_partition.is_empty() {
             let last_max_value = *self.max_values.last().unwrap();
             let last_element = self.current_partition.last_mut().unwrap();
-    
+
             if *last_element < last_max_value {
                 *last_element += 1;
                 return Some(&self.current_partition);
@@ -49,12 +49,11 @@ impl IncrementalPartitionGenerator {
             *self.current_partition.last().unwrap() + 1,
             *self.max_values.last().unwrap(),
         );
-    
+
         self.current_partition.push(0);
         self.max_values.push(next_max_value);
         Some(&self.current_partition)
     }
-
 }
 
 pub struct PartitionsGenerator {
@@ -172,11 +171,10 @@ mod tests {
         }
     }
 
-
     #[test]
     fn test_incremental3() {
         let mut gen = IncrementalPartitionGenerator::new(3);
-        
+
         // The first value is assumed to be [0] by default
         assert_eq!(gen.next(), Some(&[0, 0][..]));
         assert_eq!(gen.next(), Some(&[0, 0, 0][..]));
@@ -191,7 +189,7 @@ mod tests {
     #[test]
     fn test_incremental4() {
         let mut gen = IncrementalPartitionGenerator::new(4);
-        
+
         // The first value is assumed to be [0] by default
         assert_eq!(gen.next(), Some(&[0, 0][..]));
         assert_eq!(gen.next(), Some(&[0, 0, 0][..]));

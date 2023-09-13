@@ -3,10 +3,9 @@ use planner::planning::planning::plan_all;
 use planner::predicates::binary_predicates;
 use planner::workflow::graph;
 
-
-use std::io::Cursor;
 use std::fs::File;
-use std::io::{self, BufReader, BufRead};
+use std::io::Cursor;
+use std::io::{self, BufRead, BufReader};
 use std::path::Path;
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
@@ -28,7 +27,8 @@ fn benchmark_combined_approach(c: &mut Criterion) {
     // bod scope 8 9\n", step_size);
 
     let step_size = 20;
-    let content = format!("#Steps: {}\n\
+    let content = format!(
+        "#Steps: {}\n\
     #Users: 7\n\
     #Constraints: 12\n\
     Authorizations:\n\
@@ -51,7 +51,9 @@ fn benchmark_combined_approach(c: &mut Criterion) {
     sod scope 12 13\n\
     sod scope 14 15\n\
     bod scope 13 15\n\
-    bod scope 9 10\n", step_size);
+    bod scope 9 10\n",
+        step_size
+    );
 
     let cursor = Cursor::new(content);
     let mut binary_preds = binary_predicates::default();
@@ -93,34 +95,35 @@ fn benchmark_combined_approach(c: &mut Criterion) {
 
     // The naive benchmark is now heavily outperformed by the
 
-    // c.bench_function("Backtracking", |b| {
-    //     b.iter(|| {
-    //         let mut g = g.clone(); // Clone the original graph for each iteration
-    //         let mut g = black_box(&mut g);
-    //         let ud_preds = black_box(&binary_preds);
-    //         let auth_sets = black_box(&auth_sets);
+    c.bench_function("Backtracking", |b| {
+        b.iter(|| {
+            let mut g = g.clone(); // Clone the original graph for each iteration
+            let mut g = black_box(&mut g);
+            let ud_preds = black_box(&binary_preds);
+            let auth_sets = black_box(&auth_sets);
 
-    //         let ui_preds = binary_predicates::default();
-    //         let ud_scope: Vec<usize> = (0..step_size).collect();
-    //         // combined_approach(g, binary_preds, auth_sets);
+            let ui_preds = binary_predicates::default();
+            let ud_scope: Vec<usize> = (0..step_size).collect();
+            // combined_approach(g, binary_preds, auth_sets);
 
-    //         let _res = match plan_all(
-    //             &mut g,
-    //             auth_sets,
-    //             &ud_preds,
-    //             &ud_scope,
-    //             &ui_preds,
-    //             &vec![1, 2, 3, 4, 5],
-    //             7,
-    //         ) {
-    //             Some(ans) => ans,
-    //             None => {
-    //                 eprint!("No solutions here!");
-    //                 return;
-    //             }
-    //         };
-    //     })
-    // });
+            let _res = match plan_all(
+                &mut g,
+                &node_indices,
+                auth_sets,
+                &ud_preds,
+                &ud_scope,
+                &ui_preds,
+                &vec![1, 2, 3, 4, 5],
+                ulen,
+            ) {
+                Some(ans) => ans,
+                None => {
+                    eprint!("No solutions here!");
+                    return;
+                }
+            };
+        })
+    });
 }
 
 fn benchmark_from_file(c: &mut Criterion) {
@@ -132,7 +135,7 @@ fn benchmark_from_file(c: &mut Criterion) {
 
     let mut ui_preds = binary_predicates::default();
     let (auth_sets, node_priorities, ulen) = ui_preds.read_constraints(reader).unwrap();
-    
+
     let mut node_indices: Vec<usize> = (0..node_priorities.len()).collect();
     node_indices.sort_by_key(|&index| std::cmp::Reverse(node_priorities[index]));
 
@@ -177,6 +180,6 @@ fn benchmark_from_file(c: &mut Criterion) {
     group.finish();
 }
 
-
-criterion_group!(benches, benchmark_combined_approach, benchmark_from_file);
+// criterion_group!(benches, benchmark_combined_approach, benchmark_from_file);
+criterion_group!(benches, benchmark_combined_approach);
 criterion_main!(benches);

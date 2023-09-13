@@ -6,9 +6,9 @@ use planner::planning::planning::plan_all;
 use planner::predicates::binary_predicates;
 use planner::workflow::graph;
 
-use std::io::Cursor;
 use std::fs::File;
-use std::io::{self, BufReader, BufRead};
+use std::io::Cursor;
+use std::io::{BufRead, BufReader};
 use std::path::Path;
 
 fn old_run() {
@@ -79,37 +79,9 @@ mod tests {
 
     #[test]
     fn test_benchmark_ui() {
-        // let step_size = 10;
-        // let content = format!("#Steps: {}\n\
-        // #Users: 3\n\
-        // #Constraints: 3\n\
-        // Authorizations:\n\
-        // user 1: 1 0 1 1 0 1 0 1 1 0\n\
-        // user 2: 0 1 0 1 1 0 1 0 1 1\n\
-        // user 3: 1 1 0 1 0 0 1 0 1 1\n\
-        // Constraints:\n\
-        // sod scope 1 2\n\
-        // sod scope 0 1\n\
-        // bod scope 2 3\n\
-        // sod scope 6 7\n\
-        // bod scope 8 9\n", step_size);
-        // let step_size = 20;
-        // let content = format!("#Steps: {}\n\
-        // #Users: 3\n\
-        // #Constraints: 6\n\
-        // Authorizations:\n\
-        // user 1: 1 0 1 1 0 1 0 1 1 0 1 1 0 1 0 0 1 0 1 1\n\
-        // user 2: 0 1 0 1 1 0 1 0 1 1 1 0 1 1 0 1 0 1 1 0\n\
-        // user 3: 1 1 0 1 0 0 1 0 1 1 0 1 0 1 1 0 1 0 1 1\n\
-        // Constraints:\n\
-        // sod scope 1 2\n\
-        // sod scope 0 1\n\
-        // bod scope 2 3\n\
-        // sod scope 6 7\n\
-        // bod scope 8 9\n", step_size);
-
         let step_size = 20;
-        let content = format!("#Steps: {}\n\
+        let content = format!(
+            "#Steps: {}\n\
         #Users: 7\n\
         #Constraints: 12\n\
         Authorizations:\n\
@@ -132,7 +104,9 @@ mod tests {
         sod scope 12 13\n\
         sod scope 14 15\n\
         bod scope 13 15\n\
-        bod scope 9 10\n", step_size);
+        bod scope 9 10\n",
+            step_size
+        );
 
         let cursor = Cursor::new(content);
         let mut ui_preds = binary_predicates::default();
@@ -142,10 +116,10 @@ mod tests {
         node_indices.sort_by_key(|&index| std::cmp::Reverse(node_priorities[index]));
 
         let mut g = graph::new(step_size);
-    
+
         let ud_preds = binary_predicates::default();
-        let ud_scope = vec![1];
-    
+        let ud_scope = vec![];
+
         let res = match plan_all(
             &mut g,
             &node_indices,
@@ -167,49 +141,34 @@ mod tests {
 
     #[test]
     fn test_benchmark_bt() {
-        // let step_size = 10;
-        // let content = format!("#Steps: {}\n\
-        // #Users: 3\n\
-        // #Constraints: 3\n\
-        // Authorizations:\n\
-        // user 1: 1 0 1 1 0 1 0 1 1 0\n\
-        // user 2: 0 1 0 1 1 0 1 0 1 1\n\
-        // user 3: 1 1 0 1 0 0 1 0 1 1\n\
-        // Constraints:\n\
-        // sod scope 1 2\n\
-        // sod scope 0 1\n\
-        // bod scope 2 3\n\
-        // sod scope 6 7\n\
-        // bod scope 8 9\n", step_size);
-        // let step_size = 20;
-        // let content = format!("#Steps: {}\n\
-        // #Users: 3\n\
-        // #Constraints: 6\n\
-        // Authorizations:\n\
-        // user 1: 1 0 1 1 0 1 0 1 1 0 1 1 0 1 0 0 1 0 1 1\n\
-        // user 2: 0 1 0 1 1 0 1 0 1 1 1 0 1 1 0 1 0 1 1 0\n\
-        // user 3: 1 1 0 1 0 0 1 0 1 1 0 1 0 1 1 0 1 0 1 1\n\
-        // Constraints:\n\
-        // sod scope 1 2\n\
-        // sod scope 0 1\n\
-        // bod scope 2 3\n\
-        // sod scope 6 7\n\
-        // bod scope 8 9\n", step_size);
-
-        let step_size = 14;
-        let content = format!("#Steps: {}\n\
-        #Users: 3\n\
-        #Constraints: 6\n\
+        let step_size = 20;
+        let content = format!(
+            "#Steps: {}\n\
+        #Users: 7\n\
+        #Constraints: 12\n\
         Authorizations:\n\
-        user 1: 1 0 1 1 0 1 0 1 1 0 1 1 1 1\n\
-        user 2: 0 1 0 1 1 0 1 0 1 1 1 0 1 0\n\
-        user 3: 1 1 0 1 0 0 1 0 1 1 0 1 1 1\n\
+        user 1: 1 0 1 1 0 1 0 1 1 0 1 1 1 1 1 0 1 1 0 1\n\
+        user 2: 0 1 0 1 1 0 1 0 1 1 1 0 1 0 1 1 0 0 1 0\n\
+        user 3: 1 1 0 1 0 0 1 0 1 1 0 1 1 1 0 1 0 0 1 1\n\
+        user 4: 0 1 1 1 1 1 1 0 0 0 1 0 1 0 1 0 1 0 0 1\n\
+        user 5: 0 0 0 0 1 1 1 1 1 0 1 1 1 0 0 0 0 1 1 0\n\
+        user 6: 0 1 1 1 0 0 1 0 1 0 1 0 0 0 1 0 1 1 1 0\n\
+        user 7: 0 1 0 1 1 1 1 1 1 0 0 1 0 1 0 1 1 0 1 1\n\
         Constraints:\n\
         sod scope 2 3\n\
         sod scope 1 2\n\
+        sod scope 1 9\n\
+        sod scope 1 10\n\
+        bod scope 1 11\n\
         bod scope 3 4\n\
         sod scope 7 8\n\
-        bod scope 9 10\n", step_size);
+        sod scope 11 12\n\
+        sod scope 12 13\n\
+        sod scope 14 15\n\
+        bod scope 13 15\n\
+        bod scope 9 10\n",
+            step_size
+        );
 
         let cursor = Cursor::new(content);
         let mut ud_preds = binary_predicates::default();
@@ -217,12 +176,12 @@ mod tests {
 
         let mut node_indices: Vec<usize> = (0..node_priorities.len()).collect();
         node_indices.sort_by_key(|&index| std::cmp::Reverse(node_priorities[index]));
-    
+
         let mut g = graph::new(step_size);
-    
+
         let ui_preds = binary_predicates::default();
         let ud_scope: Vec<usize> = (0..step_size).collect();
-    
+
         let res = match plan_all(
             &mut g,
             &node_indices,
@@ -241,9 +200,7 @@ mod tests {
         };
         assert!(!res.is_empty(), "Result should not be empty");
     }
-
 }
-
 
 fn main() {
     let filename = "instance99.txt";
@@ -254,14 +211,13 @@ fn main() {
     };
     let reader = BufReader::new(file);
 
-
     let mut ui_preds = binary_predicates::default();
     let (auth_sets, node_priorities, ulen) = ui_preds.read_constraints(reader).unwrap();
 
     let mut node_indices: Vec<usize> = (0..node_priorities.len()).collect();
     node_indices.sort_by_key(|&index| std::cmp::Reverse(node_priorities[index]));
 
-    let step_size = auth_sets.len();  // Assuming step_size is the length of auth_sets
+    let step_size = auth_sets.len(); // Assuming step_size is the length of auth_sets
     let mut g = graph::new(step_size);
 
     let ud_preds = binary_predicates::default();
