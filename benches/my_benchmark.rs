@@ -1,11 +1,11 @@
 // use mycrate::fibonacci;
 use planner::planning::planning::plan_all;
-use planner::predicates::BinaryPredicateSet;
+use planner::predicates::{read_constraints, BinaryPredicateSet};
 use planner::workflow::Graph;
 
 use std::fs::File;
-use std::io::Cursor;
 use std::io::BufReader;
+use std::io::Cursor;
 use std::path::Path;
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
@@ -56,8 +56,8 @@ fn benchmark_combined_approach(c: &mut Criterion) {
     );
 
     let cursor = Cursor::new(content);
-    let mut binary_preds = BinaryPredicateSet::default();
-    let (auth_sets, node_priorities, ulen) = binary_preds.read_constraints(cursor).unwrap();
+
+    let (binary_preds, auth_sets, node_priorities, ulen) = read_constraints(cursor).unwrap();
 
     let mut node_indices: Vec<usize> = (0..node_priorities.len()).collect();
     node_indices.sort_by_key(|&index| std::cmp::Reverse(node_priorities[index]));
@@ -134,8 +134,8 @@ fn benchmark_from_file(c: &mut Criterion) {
     let file = File::open(&path).expect("Couldn't open file");
     let reader = BufReader::new(file);
 
-    let mut ui_preds = BinaryPredicateSet::default();
-    let (auth_sets, node_priorities, ulen) = ui_preds.read_constraints(reader).unwrap();
+    // let mut ui_preds = BinaryPredicateSet::default();
+    let (ui_preds, auth_sets, node_priorities, ulen) = read_constraints(reader).unwrap();
 
     let mut node_indices: Vec<usize> = (0..node_priorities.len()).collect();
     node_indices.sort_by_key(|&index| std::cmp::Reverse(node_priorities[index]));

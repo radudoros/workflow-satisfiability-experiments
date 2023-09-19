@@ -3,7 +3,7 @@
 use std::vec;
 
 use planner::planning::planning::plan_all;
-use planner::predicates::BinaryPredicateSet;
+use planner::predicates::{read_constraints, BinaryPredicateSet};
 use planner::workflow::Graph;
 
 use std::env;
@@ -48,8 +48,7 @@ mod tests {
         );
 
         let cursor = Cursor::new(content);
-        let mut ui_preds = BinaryPredicateSet::default();
-        let (auth_sets, node_priorities, ulen) = ui_preds.read_constraints(cursor).unwrap();
+        let (ui_preds, auth_sets, node_priorities, ulen) = read_constraints(cursor).unwrap();
 
         let mut node_indices: Vec<usize> = (0..node_priorities.len()).collect();
         node_indices.sort_by_key(|&index| std::cmp::Reverse(node_priorities[index]));
@@ -110,8 +109,7 @@ mod tests {
         );
 
         let cursor = Cursor::new(content);
-        let mut ud_preds = BinaryPredicateSet::default();
-        let (auth_sets, node_priorities, ulen) = ud_preds.read_constraints(cursor).unwrap();
+        let (ud_preds, auth_sets, node_priorities, ulen) = read_constraints(cursor).unwrap();
 
         let mut node_indices: Vec<usize> = (0..node_priorities.len()).collect();
         node_indices.sort_by_key(|&index| std::cmp::Reverse(node_priorities[index]));
@@ -159,8 +157,7 @@ fn main() {
     };
     let reader = BufReader::new(file);
 
-    let mut ui_preds = BinaryPredicateSet::default();
-    let (auth_sets, node_priorities, ulen) = ui_preds.read_constraints(reader).unwrap();
+    let (ui_preds, auth_sets, node_priorities, ulen) = read_constraints(reader).unwrap();
 
     let mut node_indices: Vec<usize> = (0..node_priorities.len()).collect();
     node_indices.sort_by_key(|&index| std::cmp::Reverse(node_priorities[index]));
