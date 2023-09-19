@@ -1,11 +1,11 @@
 // use mycrate::fibonacci;
 use planner::planning::planning::plan_all;
-use planner::predicates::binary_predicates;
-use planner::workflow::graph;
+use planner::predicates::BinaryPredicateSet;
+use planner::workflow::Graph;
 
 use std::fs::File;
 use std::io::Cursor;
-use std::io::{self, BufRead, BufReader};
+use std::io::BufReader;
 use std::path::Path;
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
@@ -56,13 +56,13 @@ fn benchmark_combined_approach(c: &mut Criterion) {
     );
 
     let cursor = Cursor::new(content);
-    let mut binary_preds = binary_predicates::default();
+    let mut binary_preds = BinaryPredicateSet::default();
     let (auth_sets, node_priorities, ulen) = binary_preds.read_constraints(cursor).unwrap();
 
     let mut node_indices: Vec<usize> = (0..node_priorities.len()).collect();
     node_indices.sort_by_key(|&index| std::cmp::Reverse(node_priorities[index]));
 
-    let g = graph::new(step_size);
+    let g = Graph::new(step_size);
 
     c.bench_function("Combined Approach", |b| {
         b.iter(|| {
@@ -71,7 +71,7 @@ fn benchmark_combined_approach(c: &mut Criterion) {
             let ui_preds = black_box(&binary_preds);
             let auth_sets = black_box(&auth_sets);
 
-            let ud_preds = binary_predicates::default();
+            let ud_preds = BinaryPredicateSet::default();
             let ud_scope = vec![];
 
             let _res = match plan_all(
@@ -102,7 +102,7 @@ fn benchmark_combined_approach(c: &mut Criterion) {
             let ud_preds = black_box(&binary_preds);
             let auth_sets = black_box(&auth_sets);
 
-            let ui_preds = binary_predicates::default();
+            let ui_preds = BinaryPredicateSet::default();
             let ud_scope: Vec<usize> = (0..step_size).collect();
             // combined_approach(g, binary_preds, auth_sets);
 
@@ -126,6 +126,7 @@ fn benchmark_combined_approach(c: &mut Criterion) {
     });
 }
 
+#[allow(dead_code)]
 fn benchmark_from_file(c: &mut Criterion) {
     // Setup code here
     let filename = "instance99.txt";
@@ -133,14 +134,14 @@ fn benchmark_from_file(c: &mut Criterion) {
     let file = File::open(&path).expect("Couldn't open file");
     let reader = BufReader::new(file);
 
-    let mut ui_preds = binary_predicates::default();
+    let mut ui_preds = BinaryPredicateSet::default();
     let (auth_sets, node_priorities, ulen) = ui_preds.read_constraints(reader).unwrap();
 
     let mut node_indices: Vec<usize> = (0..node_priorities.len()).collect();
     node_indices.sort_by_key(|&index| std::cmp::Reverse(node_priorities[index]));
 
     let step_size = auth_sets.len();
-    let g = graph::new(step_size); // moved to setup
+    let g = Graph::new(step_size); // moved to setup
 
     let mut group = c.benchmark_group("UI Group");
     group.sample_size(10);
@@ -155,7 +156,7 @@ fn benchmark_from_file(c: &mut Criterion) {
             let ui_preds = black_box(&ui_preds);
             let node_indices = black_box(&node_indices);
 
-            let ud_preds = binary_predicates::default();
+            let ud_preds = BinaryPredicateSet::default();
             let ud_scope = vec![];
 
             let _res = match plan_all(

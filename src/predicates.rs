@@ -1,22 +1,21 @@
-use crate::workflow::graph;
+use crate::workflow::Graph;
 use std::cell::RefCell;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Read};
 use std::rc::Rc;
 
-type binary_pred = dyn Fn(&graph) -> bool;
-type weight_pred = dyn Fn(&graph) -> f64;
+type BinaryPredicate = dyn Fn(&Graph) -> bool;
 
 #[derive(Default)]
-pub struct binary_predicates {
-    preds: Vec<Box<binary_pred>>,
+pub struct BinaryPredicateSet {
+    preds: Vec<Box<BinaryPredicate>>,
     // predicate location id (to identify sites' predicates)
     pred_loc: Vec<i32>,
 }
 
-impl binary_predicates {
+impl BinaryPredicateSet {
     #[allow(dead_code)]
-    pub fn eval(&self, g: &graph) -> bool {
+    pub fn eval(&self, g: &Graph) -> bool {
         for p in self.preds.iter() {
             if !p(g) {
                 return false;
@@ -31,7 +30,7 @@ impl binary_predicates {
     }
 
     #[allow(dead_code)]
-    pub fn filtered_eval(&self, g: &graph, filtered_in: i32) -> bool {
+    pub fn filtered_eval(&self, g: &Graph, filtered_in: i32) -> bool {
         for (i, p) in self.preds.iter().enumerate() {
             if self.pred_loc[i] != filtered_in {
                 continue;
@@ -134,7 +133,7 @@ impl binary_predicates {
                     step_predicate_counts[x] += 1;
                     step_predicate_counts[y] += 1;
 
-                    self.preds.push(Box::new(move |g: &graph| {
+                    self.preds.push(Box::new(move |g: &Graph| {
                         g.nodes_id[x] == -1 || g.nodes_id[y] == -1 || g.nodes_id[x] != g.nodes_id[y]
                     }));
                     self.pred_loc.push(-1);
@@ -147,7 +146,7 @@ impl binary_predicates {
                     step_predicate_counts[x] += 10;
                     step_predicate_counts[y] += 10;
 
-                    self.preds.push(Box::new(move |g: &graph| {
+                    self.preds.push(Box::new(move |g: &Graph| {
                         g.nodes_id[x] == -1 || g.nodes_id[y] == -1 || g.nodes_id[x] == g.nodes_id[y]
                     }));
                     self.pred_loc.push(-1);
@@ -167,7 +166,7 @@ impl binary_predicates {
                     // Hack, preallocate and capture it in the closure
                     let shared_vec = Rc::new(RefCell::new(Vec::with_capacity(max_count)));
 
-                    self.preds.push(Box::new(move |g: &graph| {
+                    self.preds.push(Box::new(move |g: &Graph| {
                         let mut unique_ids = shared_vec.borrow_mut();
                         unique_ids.clear();
 
@@ -203,7 +202,7 @@ impl binary_predicates {
                     step_predicate_counts[scope_indices[0]] += 1;
                     step_predicate_counts[scope_indices[1]] += 1;
 
-                    self.preds.push(Box::new(move |g: &graph| {
+                    self.preds.push(Box::new(move |g: &Graph| {
                         let user1 = g.nodes_id[scope_indices[0]];
                         let user2 = g.nodes_id[scope_indices[1]];
                         user1 == -1
@@ -251,7 +250,7 @@ impl binary_predicates {
             let x = parts[0];
             let y = parts[1];
             self.preds
-                .push(Box::new(move |g: &graph| g.nodes_id[x] != g.nodes_id[y]));
+                .push(Box::new(move |g: &Graph| g.nodes_id[x] != g.nodes_id[y]));
             self.pred_loc.push(-1); // assuming default value for the example
         }
         Ok(())
@@ -269,14 +268,14 @@ impl binary_predicates {
             let x = parts[0];
             let y = parts[1];
             self.preds
-                .push(Box::new(move |g: &graph| g.nodes_id[x] == g.nodes_id[y]));
+                .push(Box::new(move |g: &Graph| g.nodes_id[x] == g.nodes_id[y]));
             self.pred_loc.push(-1); // assuming default value for the example
         }
         Ok(())
     }
 
     pub fn generate_k_different(&mut self, v: Vec<usize>, k: usize) {
-        self.preds.push(Box::new(move |g: &graph| {
+        self.preds.push(Box::new(move |g: &Graph| {
             let mut unique_labels = std::collections::HashSet::new();
             let mut cnt_unset = 0;
 
@@ -292,43 +291,9 @@ impl binary_predicates {
     }
 }
 
-#[allow(dead_code)]
-pub struct weight_predicates {
-    preds: Vec<Box<weight_pred>>,
-    // predicate location id (to identify sites' predicates)
-    pred_loc: Vec<i32>,
-}
-
-impl weight_predicates {
-    #[allow(dead_code)]
-    pub fn eval(&self, g: &graph) -> f64 {
-        let mut sum: f64 = 0.0;
-        for p in self.preds.iter() {
-            sum += p(g);
-        }
-
-        sum
-    }
-
-    #[allow(dead_code)]
-    pub fn filtered_eval(&self, g: &graph, filtered_in: i32) -> f64 {
-        let mut sum: f64 = 0.0;
-        for (i, p) in self.preds.iter().enumerate() {
-            if self.pred_loc[i] != filtered_in {
-                continue;
-            }
-            for p in self.preds.iter() {
-                sum += p(g);
-            }
-        }
-
-        sum
-    }
-}
-
-pub fn generate_mock_ui_predicates() -> binary_predicates {
-    let mut v: Vec<Box<binary_pred>> = Vec::new();
-    v.push(Box::new(|g: &graph| {
+pub fn generate_mock_ui_predicates() -> BinaryPredicateSet {
+    let mut v: Vec<Box<BinaryPredicate>> = Vec::new();
+    v.push(Box::new(|g: &Graph| {
         // policy: don't allow a step and its child step to be same:
         for (v, adj) in g.adjacency_list.iter().enumerate() {
             if g.nodes_id[v] == -1 {
@@ -349,21 +314,21 @@ pub fn generate_mock_ui_predicates() -> binary_predicates {
         ids.push(i);
     }
 
-    binary_predicates {
+    BinaryPredicateSet {
         preds: v,
         pred_loc: ids,
     }
 }
 
 #[allow(dead_code)]
-pub fn generate_mock_ud_predicates() -> binary_predicates {
-    let mut v: Vec<Box<binary_pred>> = Vec::new();
+pub fn generate_mock_ud_predicates() -> BinaryPredicateSet {
+    let mut v: Vec<Box<BinaryPredicate>> = Vec::new();
 
     v.push(Box::new(|_| true));
-    v.push(Box::new(|g: &graph| {
+    v.push(Box::new(|g: &Graph| {
         g.nodes_id.len() < 2 || g.nodes_id[2] == -1 || g.nodes_id[2] == 1
     }));
-    v.push(Box::new(|g: &graph| {
+    v.push(Box::new(|g: &Graph| {
         g.nodes_id.len() < 1 || g.nodes_id[1] == -1 || g.nodes_id[1] == 2
     }));
 
@@ -372,62 +337,7 @@ pub fn generate_mock_ud_predicates() -> binary_predicates {
         ids.push(i);
     }
 
-    binary_predicates {
-        preds: v,
-        pred_loc: ids,
-    }
-}
-
-#[allow(dead_code)]
-pub fn generate_mock_weight_predicates() -> weight_predicates {
-    let mut v: Vec<Box<weight_pred>> = Vec::new();
-    v.push(Box::new(|g: &graph| {
-        // policy: penalize when parent is same as child
-        let mut w: f64 = 0.0;
-        for (v, adj) in g.adjacency_list.iter().enumerate() {
-            if g.nodes_id[v] == -1 {
-                continue;
-            }
-            for neigh in adj.iter() {
-                if g.nodes_id[v] == g.nodes_id[*neigh] {
-                    w += 0.1;
-                }
-            }
-        }
-
-        w
-    }));
-
-    v.push(Box::new(|g: &graph| {
-        // policy: penalize when parent has 2 children the same as itself
-        let mut w: f64 = 0.0;
-        for (v, adj) in g.adjacency_list.iter().enumerate() {
-            if g.nodes_id[v] == -1 {
-                continue;
-            }
-            let mut found_one = false;
-            for neigh in adj.iter() {
-                if g.nodes_id[v] != g.nodes_id[*neigh] {
-                    continue;
-                }
-
-                if !found_one {
-                    found_one = true;
-                } else {
-                    w += 0.3;
-                }
-            }
-        }
-
-        w
-    }));
-
-    let mut ids: Vec<i32> = Vec::new();
-    for i in 0..v.len() as i32 {
-        ids.push(i);
-    }
-
-    weight_predicates {
+    BinaryPredicateSet {
         preds: v,
         pred_loc: ids,
     }
@@ -455,7 +365,7 @@ mod tests {
             ";
 
         let cursor = Cursor::new(content);
-        let mut binary_preds = binary_predicates::default();
+        let mut binary_preds = BinaryPredicateSet::default();
         let (auth_sets, _, _) = binary_preds.read_constraints(cursor).unwrap();
 
         assert_eq!(auth_sets.len(), 18);

@@ -5,15 +5,15 @@ pub mod planning {
     use crate::bipartite_matching::BipartiteGraph;
     use crate::partition_generator::{IncrementalPartitionGenerator, PartitionsGenerator};
     use crate::planning_misc::planning_misc::Generator;
-    use crate::predicates::binary_predicates;
-    use crate::workflow::graph;
+    use crate::predicates::BinaryPredicateSet;
+    use crate::workflow::Graph;
 
     // Find combination
     fn combine(
         auth: &Vec<Vec<usize>>,
         pattern_map: &Vec<Vec<usize>>,
         ulen: usize,
-        g: &mut graph,
+        g: &mut Graph,
     ) -> Option<Vec<(usize, usize)>> {
         // 1. Initialize bipartite graph
         let pattern_size = pattern_map.len();
@@ -61,10 +61,10 @@ pub mod planning {
     }
 
     pub fn plan_pattern_incremental(
-        graph: &mut graph,
+        graph: &mut Graph,
         node_priorities: &Vec<usize>,
         authorizations: &Vec<Vec<usize>>,
-        predicates: &binary_predicates,
+        predicates: &BinaryPredicateSet,
         user_length: usize,
     ) -> Option<Vec<usize>> {
         // Initialize incremental pattern generator and other variables
@@ -72,7 +72,7 @@ pub mod planning {
         let mut pattern_generator = IncrementalPartitionGenerator::new(pattern_length);
         let mut pattern_nodes = vec![vec![]; pattern_length];
         let assignment_graph_size = pattern_length + user_length;
-        let mut assignment_graph = graph::new(assignment_graph_size);
+        let mut assignment_graph = Graph::new(assignment_graph_size);
 
         // Loop over generated partitions
         let mut next_partition = pattern_generator.next();
@@ -113,7 +113,7 @@ pub mod planning {
     }
 
     /// Update node labels in the graph based on the given partition.
-    fn update_graph_labels(graph: &mut graph, partition: &[usize], node_priorities: &[usize]) {
+    fn update_graph_labels(graph: &mut Graph, partition: &[usize], node_priorities: &[usize]) {
         for id in &mut graph.nodes_id {
             *id = -1;
         }
@@ -122,8 +122,9 @@ pub mod planning {
         }
     }
 
+    #[allow(dead_code)]
     /// Update node labels in the graph based on the given partition.
-    fn update_graph_labels_no_prio(graph: &mut graph, partition: &[usize]) {
+    fn update_graph_labels_no_prio(graph: &mut Graph, partition: &[usize]) {
         for id in &mut graph.nodes_id {
             *id = -1;
         }
@@ -170,9 +171,9 @@ pub mod planning {
     }
 
     pub fn plan_pattern(
-        g: &mut graph,
+        g: &mut Graph,
         auth: &Vec<Vec<usize>>,
-        preds: &binary_predicates,
+        preds: &BinaryPredicateSet,
         ulen: usize,
     ) -> Option<Vec<usize>> {
         let pattern_length = g.nodes_id.len();
@@ -181,7 +182,7 @@ pub mod planning {
         let mut pattern_nodes: Vec<Vec<usize>> = vec![vec![]; g.nodes_id.len()];
 
         let assignment_graph_sz = g.nodes_id.len() + ulen;
-        let mut assignment_graph = graph::new(assignment_graph_sz);
+        let mut assignment_graph = Graph::new(assignment_graph_sz);
 
         let mut generator = PartitionsGenerator::new(g.nodes_id.len());
         while let Some(partition) = generator.next() {
@@ -212,12 +213,12 @@ pub mod planning {
     }
 
     pub fn plan_all(
-        g: &mut graph,
+        g: &mut Graph,
         node_priorities: &Vec<usize>,
         auth: &Vec<Vec<usize>>,
-        genneral_preds: &binary_predicates,
+        genneral_preds: &BinaryPredicateSet,
         general_nodes: &Vec<usize>,
-        ui_preds: &binary_predicates,
+        ui_preds: &BinaryPredicateSet,
         _ui_nodes: &[usize],
         ulen: usize,
     ) -> Option<Vec<usize>> {
@@ -238,7 +239,7 @@ pub mod planning {
             })
             .collect();
 
-        let mut generator = Generator::new(g, ulen, genneral_preds, &general_nodes, auth_i32);
+        let mut generator = Generator::new(g, genneral_preds, &general_nodes, auth_i32);
         while let Some(solution) = generator.next() {
             // 1. check first if the solution and the authentication sets intersect:
             let mut ok = true;
@@ -353,10 +354,10 @@ pub fn read_auth_sets1(filename: &str) -> Result<Vec<Vec<usize>>, Box<dyn std::e
 mod tests {
     use super::*;
     use crate::predicates::{generate_mock_ud_predicates, generate_mock_ui_predicates};
-    use crate::workflow::graph;
+    use crate::workflow::Graph;
 
-    fn create_graph() -> graph {
-        let mut g = graph::new(4);
+    fn create_graph() -> Graph {
+        let mut g = Graph::new(4);
         g.add_edge(0, 1);
         g.add_edge(0, 2);
         g.add_edge(1, 3);
@@ -368,7 +369,7 @@ mod tests {
     #[test]
     fn test_plan_pattern() {
         // Initialize the graph, authorized users, predicates and user length
-        let mut g = graph::new(5);
+        let mut g = Graph::new(5);
         g.add_edge(0, 1);
         g.add_edge(0, 2);
         g.add_edge(1, 3);

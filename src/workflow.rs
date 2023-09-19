@@ -2,16 +2,16 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 
 #[derive(Clone)]
-pub struct graph {
+pub struct Graph {
     // labels:
     pub nodes_id: Vec<i32>,
     // graph edges: (note that they're a DAG always)
     pub adjacency_list: Vec<Vec<usize>>,
 }
 
-impl graph {
-    pub fn new(sz: usize) -> graph {
-        graph {
+impl Graph {
+    pub fn new(sz: usize) -> Graph {
+        Graph {
             nodes_id: vec![-1; sz],
             adjacency_list: vec![Vec::new(); sz],
         }
@@ -43,7 +43,7 @@ impl graph {
         let n: usize = lines.next().unwrap()?.trim().parse()?;
 
         // Initialize an empty graph with n nodes
-        let mut g = graph::new(n);
+        let mut g = Graph::new(n);
 
         // Read edges from the remaining lines and add them to the graph
         for line in lines {
@@ -65,7 +65,7 @@ impl graph {
 }
 
 #[allow(dead_code)]
-fn topo_sort_helper(g: &graph, v: usize, topo_sorted: &mut Vec<usize>, visited: &mut Vec<bool>) {
+fn topo_sort_helper(g: &Graph, v: usize, topo_sorted: &mut Vec<usize>, visited: &mut Vec<bool>) {
     if visited[v] {
         return;
     }
@@ -79,7 +79,7 @@ fn topo_sort_helper(g: &graph, v: usize, topo_sorted: &mut Vec<usize>, visited: 
 }
 
 #[allow(dead_code)]
-pub fn topo_sort(g: &graph) -> Vec<usize> {
+pub fn topo_sort(g: &Graph) -> Vec<usize> {
     let mut visited: Vec<bool> = vec![false; g.nodes_id.len()];
     let mut topo_sorted: Vec<usize> = Vec::new();
 
