@@ -22,6 +22,8 @@ overflow-checks = false
 [profile.bench]
 debug = true
 
+[profile.release]
+opt-level = 3
 
 [dev-dependencies]
 criterion = "0.5.1"
