@@ -1,6 +1,6 @@
 // use mycrate::fibonacci;
 use planner::planning::planning::plan_all;
-use planner::predicates::{read_constraints, BinaryPredicateSet};
+use planner::predicates::{read_constraints, BinaryPredicateSet, ReadConstraintsResult};
 use planner::workflow::Graph;
 
 use std::fs::File;
@@ -57,7 +57,14 @@ fn benchmark_combined_approach(c: &mut Criterion) {
 
     let cursor = Cursor::new(content);
 
-    let (binary_preds, auth_sets, node_priorities, ulen) = read_constraints(cursor).unwrap();
+    let ReadConstraintsResult {
+        ui_set,
+        non_ui_set,
+        auth_sets,
+        node_priorities,
+        num_users,
+        non_ui_nodes,
+    } = read_constraints(cursor).unwrap();
 
     let mut node_indices: Vec<usize> = (0..node_priorities.len()).collect();
     node_indices.sort_by_key(|&index| std::cmp::Reverse(node_priorities[index]));
@@ -68,7 +75,7 @@ fn benchmark_combined_approach(c: &mut Criterion) {
         b.iter(|| {
             let mut g = g.clone(); // Clone the original graph for each iteration
             let mut g = black_box(&mut g);
-            let ui_preds = black_box(&binary_preds);
+            let ui_preds = black_box(&ui_set);
             let auth_sets = black_box(&auth_sets);
 
             let ud_preds = BinaryPredicateSet::default();
@@ -82,7 +89,7 @@ fn benchmark_combined_approach(c: &mut Criterion) {
                 &ud_scope,
                 &ui_preds,
                 &vec![1, 2, 3, 4, 5],
-                ulen,
+                num_users,
             ) {
                 Some(ans) => ans,
                 None => {
@@ -99,7 +106,7 @@ fn benchmark_combined_approach(c: &mut Criterion) {
         b.iter(|| {
             let mut g = g.clone(); // Clone the original graph for each iteration
             let mut g = black_box(&mut g);
-            let ud_preds = black_box(&binary_preds);
+            let ud_preds = black_box(&ui_set);
             let auth_sets = black_box(&auth_sets);
 
             let ui_preds = BinaryPredicateSet::default();
@@ -114,7 +121,7 @@ fn benchmark_combined_approach(c: &mut Criterion) {
                 &ud_scope,
                 &ui_preds,
                 &vec![1, 2, 3, 4, 5],
-                ulen,
+                num_users,
             ) {
                 Some(ans) => ans,
                 None => {
@@ -134,8 +141,14 @@ fn benchmark_from_file(c: &mut Criterion) {
     let file = File::open(&path).expect("Couldn't open file");
     let reader = BufReader::new(file);
 
-    // let mut ui_preds = BinaryPredicateSet::default();
-    let (ui_preds, auth_sets, node_priorities, ulen) = read_constraints(reader).unwrap();
+    let ReadConstraintsResult {
+        ui_set,
+        non_ui_set,
+        auth_sets,
+        node_priorities,
+        num_users,
+        non_ui_nodes,
+    } = read_constraints(reader).unwrap();
 
     let mut node_indices: Vec<usize> = (0..node_priorities.len()).collect();
     node_indices.sort_by_key(|&index| std::cmp::Reverse(node_priorities[index]));
@@ -153,7 +166,7 @@ fn benchmark_from_file(c: &mut Criterion) {
             let g = black_box(&mut g); // Avoid compiler optimizations
 
             let auth_sets = black_box(&auth_sets);
-            let ui_preds = black_box(&ui_preds);
+            let ui_preds = black_box(&ui_set);
             let node_indices = black_box(&node_indices);
 
             let ud_preds = BinaryPredicateSet::default();
@@ -167,7 +180,7 @@ fn benchmark_from_file(c: &mut Criterion) {
                 &ud_scope,
                 ui_preds,
                 &vec![1, 2, 3, 4, 5],
-                ulen,
+                num_users,
             ) {
                 Some(ans) => ans,
                 None => {

@@ -3,7 +3,7 @@
 use std::vec;
 
 use planner::planning::planning::plan_all;
-use planner::predicates::{read_constraints, BinaryPredicateSet};
+use planner::predicates::{read_constraints, BinaryPredicateSet, ReadConstraintsResult};
 use planner::workflow::Graph;
 
 use std::env;
@@ -43,30 +43,35 @@ mod tests {
             sod scope 12 13\n\
             sod scope 14 15\n\
             bod scope 13 15\n\
+            assignment-dependent scope 19 20 users 3 and 7\n\
             bod scope 9 10\n",
             step_size
         );
 
         let cursor = Cursor::new(content);
-        let (ui_preds, auth_sets, node_priorities, ulen) = read_constraints(cursor).unwrap();
+        let ReadConstraintsResult {
+            ui_set,
+            non_ui_set,
+            auth_sets,
+            node_priorities,
+            num_users,
+            non_ui_nodes,
+        } = read_constraints(cursor).unwrap();
 
         let mut node_indices: Vec<usize> = (0..node_priorities.len()).collect();
         node_indices.sort_by_key(|&index| std::cmp::Reverse(node_priorities[index]));
 
         let mut g = Graph::new(step_size);
 
-        let ud_preds = BinaryPredicateSet::default();
-        let ud_scope = vec![];
-
         let res = match plan_all(
             &mut g,
             &node_indices,
             &auth_sets,
-            &ud_preds,
-            &ud_scope,
-            &ui_preds,
+            &non_ui_set,
+            &non_ui_nodes,
+            &ui_set,
             &vec![1, 2, 3],
-            ulen,
+            num_users,
         ) {
             Some(ans) => ans,
             None => {
@@ -109,7 +114,14 @@ mod tests {
         );
 
         let cursor = Cursor::new(content);
-        let (ud_preds, auth_sets, node_priorities, ulen) = read_constraints(cursor).unwrap();
+        let ReadConstraintsResult {
+            ui_set,
+            non_ui_set: _,
+            auth_sets,
+            node_priorities,
+            num_users,
+            non_ui_nodes: _,
+        } = read_constraints(cursor).unwrap();
 
         let mut node_indices: Vec<usize> = (0..node_priorities.len()).collect();
         node_indices.sort_by_key(|&index| std::cmp::Reverse(node_priorities[index]));
@@ -123,11 +135,11 @@ mod tests {
             &mut g,
             &node_indices,
             &auth_sets,
-            &ud_preds,
+            &ui_set,
             &ud_scope,
             &ui_preds,
             &vec![1, 2, 3],
-            ulen,
+            num_users,
         ) {
             Some(ans) => ans,
             None => {
@@ -157,7 +169,14 @@ fn main() {
     };
     let reader = BufReader::new(file);
 
-    let (ui_preds, auth_sets, node_priorities, ulen) = read_constraints(reader).unwrap();
+    let ReadConstraintsResult {
+        ui_set,
+        non_ui_set,
+        auth_sets,
+        node_priorities,
+        num_users,
+        non_ui_nodes,
+    } = read_constraints(reader).unwrap();
 
     let mut node_indices: Vec<usize> = (0..node_priorities.len()).collect();
     node_indices.sort_by_key(|&index| std::cmp::Reverse(node_priorities[index]));
@@ -174,9 +193,9 @@ fn main() {
         &auth_sets,
         &ud_preds,
         &ud_scope,
-        &ui_preds,
+        &ui_set,
         &vec![1, 2, 3],
-        ulen,
+        num_users,
     ) {
         Some(ans) => ans,
         None => {

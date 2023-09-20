@@ -46,8 +46,10 @@ pub mod planning_misc {
                     continue;
                 }
 
-                self.g.nodes_id[current_node_index] =
-                    self.auth_set_indices[current_node_index] as i32;
+                let idx = self.auth_set_indices[current_node_index] as usize;
+                self.g.nodes_id[current_node_index] = self.auth_sets[current_node_index][idx];
+                // self.g.nodes_id[current_node_index] =
+                //     self.auth_set_indices[current_node_index] as i32;
 
                 if self.preds.eval(&self.g) {
                     self.current_index = Some(index + 1);

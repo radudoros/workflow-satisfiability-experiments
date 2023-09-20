@@ -78,7 +78,7 @@ pub mod planning {
         let mut next_partition = pattern_generator.next();
         while let Some(partition) = next_partition {
             // Step 1: Update the graph based on the new partition and evaluate predicates
-            update_graph_labels(graph, partition, &node_priorities);
+            update_graph_labels(graph, partition, &node_priorities, &authorizations);
 
             if !predicates.eval(graph) {
                 next_partition = pattern_generator.inc_next();
@@ -96,9 +96,10 @@ pub mod planning {
             ) {
                 if partition.len() == pattern_length {
                     return Some(
-                        partition
+                        graph
+                            .nodes_id
                             .iter()
-                            .map(|&n| matching[n].1 - pattern_size)
+                            .map(|&n| matching[n as usize].1 - pattern_size)
                             .collect(),
                     );
                 }
@@ -113,7 +114,12 @@ pub mod planning {
     }
 
     /// Update node labels in the graph based on the given partition.
-    fn update_graph_labels(graph: &mut Graph, partition: &[usize], node_priorities: &[usize]) {
+    fn update_graph_labels(
+        graph: &mut Graph,
+        partition: &[usize],
+        node_priorities: &[usize],
+        authorizations: &Vec<Vec<usize>>,
+    ) {
         for id in &mut graph.nodes_id {
             *id = -1;
         }
