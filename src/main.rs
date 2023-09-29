@@ -3,7 +3,7 @@
 use std::vec;
 
 use planner::planning::planning::plan_all;
-use planner::predicates::{read_constraints, BinaryPredicateSet, ReadConstraintsResult};
+use planner::predicates::{read_constraints, ReadConstraintsResult};
 use planner::workflow::Graph;
 
 use std::env;
@@ -15,6 +15,7 @@ use std::path::Path;
 mod tests {
     use super::*;
     use std::io::Cursor;
+    use planner::predicates::BinaryPredicateSet;
 
     #[test]
     fn test_benchmark_ui() {
@@ -44,6 +45,8 @@ mod tests {
             sod scope 14 15\n\
             bod scope 13 15\n\
             assignment-dependent scope 19 20 users 3 and 7\n\
+            sual scope 4 5 10 12 13 limit 3 users 3 4 5\n\
+            wang-li scope 13 9 user groups (3 4) (6 7)
             bod scope 9 10\n",
             step_size
         );
@@ -184,15 +187,12 @@ fn main() {
     let step_size = auth_sets.len(); // Assuming step_size is the length of auth_sets
     let mut g = Graph::new(step_size);
 
-    let ud_preds = BinaryPredicateSet::default();
-    let ud_scope = vec![];
-
     let res = match plan_all(
         &mut g,
         &node_indices,
         &auth_sets,
-        &ud_preds,
-        &ud_scope,
+        &non_ui_set,
+        &non_ui_nodes,
         &ui_set,
         &vec![1, 2, 3],
         num_users,

@@ -1,4 +1,5 @@
 use crate::workflow::Graph;
+use std::collections::HashSet;
 use std::cell::RefCell;
 use std::io::{BufRead, BufReader, Read};
 use std::rc::Rc;
@@ -160,8 +161,8 @@ pub fn read_constraints<R: Read>(reader: R) -> std::io::Result<ReadConstraintsRe
                 let x: usize = parts.get(2).and_then(|s| s.parse().ok()).unwrap_or(0) - 1;
                 let y: usize = parts.get(3).and_then(|s| s.parse().ok()).unwrap_or(0) - 1;
 
-                step_predicate_counts[x] += 10;
-                step_predicate_counts[y] += 10;
+                step_predicate_counts[x] += 100;
+                step_predicate_counts[y] += 100;
 
                 ui_set.preds.push(Box::new(move |g: &Graph| {
                     g.nodes_id[x] == -1 || g.nodes_id[y] == -1 || g.nodes_id[x] == g.nodes_id[y]
@@ -206,7 +207,7 @@ pub fn read_constraints<R: Read>(reader: R) -> std::io::Result<ReadConstraintsRe
                     parts.get(3).and_then(|s| s.parse().ok()).unwrap_or(0) - 1,
                 ];
 
-                for index in scope_indices.iter() {
+                for index in &scope_indices {
                     if !non_ui_nodes.contains(index) {
                         non_ui_nodes.push(*index);
                     }
@@ -222,8 +223,8 @@ pub fn read_constraints<R: Read>(reader: R) -> std::io::Result<ReadConstraintsRe
                     .filter_map(|s| s.parse().ok())
                     .collect();
 
-                step_predicate_counts[scope_indices[0]] += 1;
-                step_predicate_counts[scope_indices[1]] += 1;
+                step_predicate_counts[scope_indices[0]] += 5;
+                step_predicate_counts[scope_indices[1]] += 5;
 
                 non_ui_set.preds.push(Box::new(move |g: &Graph| {
                     let user1 = g.nodes_id[scope_indices[0]];
@@ -232,6 +233,117 @@ pub fn read_constraints<R: Read>(reader: R) -> std::io::Result<ReadConstraintsRe
                         || user2 == -1
                         || !users_set1.contains(&user1)
                         || (users_set1.contains(&user1) && users_set2.contains(&user2))
+                }));
+                non_ui_set.pred_loc.push(-1);
+            }
+            Some("wang-li") => {
+                let scope_indices: Vec<usize> = vec![
+                    parts.get(2).and_then(|s| s.parse().ok()).unwrap_or(0),
+                    parts.get(3).and_then(|s| s.parse().ok()).unwrap_or(0),
+                ];
+
+                let user_sets_start = parts.iter().position(|s| s == "groups").unwrap_or(0) + 1;
+                let user_sets: Vec<Vec<i32>> = parts[user_sets_start..]
+                    .split(|s| s == ")")
+                    .filter(|group| !group.is_empty())
+                    .map(|group| {
+                        group.iter()
+                            .filter(|&s| s != "(" && s != ")")
+                            .filter_map(|s| s.parse().ok())
+                            .map(|x: i32| x - 1)
+                            .collect()
+                    })
+                    .collect();
+
+                for index in &scope_indices {
+                    if !non_ui_nodes.contains(index) {
+                        non_ui_nodes.push(*index);
+                    }
+                }
+
+                for &si in &scope_indices {
+                    step_predicate_counts[si] += 5;
+                }
+
+
+                non_ui_set.preds.push(Box::new(move |g: &Graph| {
+                    let mut crt_set: Option<usize> = None;
+                    for &s in &scope_indices {
+                        let node_id = g.nodes_id[s];
+                        if node_id == -1 {
+                            continue;
+                        }
+
+                        match crt_set {
+                            None => {
+                                // This is the first assigned item; find the first set containing the user.
+                                crt_set = user_sets.iter().position(|set| set.contains(&node_id));
+                                if crt_set.is_none() {
+                                    // If no set contains the user, the constraint is violated.
+                                    return false;
+                                }
+                            }
+                            Some(set_idx) => {
+                                // All further nodes must belong to the same set as the first.
+                                if !user_sets[set_idx].contains(&node_id) {
+                                    return false;
+                                }
+                            }
+                        }
+                    }
+                    true
+                }));
+                non_ui_set.pred_loc.push(-1);
+            }
+            Some("sual") => {
+                // Handle the SUAL constraint
+                let limit: usize = parts.get(parts.iter().position(|s| s == "limit").unwrap_or(0) + 1)
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(0);
+                let users_start = parts.iter().position(|s| s == "users").unwrap_or(0) + 1;
+                let super_users: Vec<usize> = parts[users_start..]
+                    .iter()
+                    .filter_map(|s| s.parse().ok())
+                    .map(|x: usize| x - 1)
+                    .collect();
+
+                // Locate and parse the scope
+                let scope_start = parts.iter().position(|s| s == "scope").unwrap_or(0) + 1;
+                let scope_end = parts.iter().position(|s| s == "limit").unwrap_or(parts.len()) - 1;
+                let scope_indices: Vec<usize> = parts[scope_start..scope_end]
+                    .iter()
+                    .filter_map(|s| s.parse().ok())
+                    .map(|x: usize| x - 1)
+                    .collect();
+
+                for index in &scope_indices {
+                    if !non_ui_nodes.contains(index) {
+                        non_ui_nodes.push(*index);
+                    }
+                }
+
+                non_ui_set.preds.push(Box::new(move |g: &Graph| {
+                    let mut assigned_users = Vec::new();
+
+                    for &step in &scope_indices {
+                        let user = g.nodes_id[step];
+                        if user != -1 {
+                            assigned_users.push(user as usize);
+                        }
+                    }
+
+                    let unique_users_count = assigned_users.iter().collect::<HashSet<_>>().len();
+
+                    if unique_users_count <= limit {
+                        // All assigned users should be super users
+                        for user in assigned_users {
+                            if !super_users.contains(&user) {
+                                return false;
+                            }
+                        }
+                    }
+
+                    true
                 }));
                 non_ui_set.pred_loc.push(-1);
             }

@@ -78,7 +78,7 @@ pub mod planning {
         let mut next_partition = pattern_generator.next();
         while let Some(partition) = next_partition {
             // Step 1: Update the graph based on the new partition and evaluate predicates
-            update_graph_labels(graph, partition, &node_priorities, &authorizations);
+            update_graph_labels(graph, partition, &node_priorities);
 
             if !predicates.eval(graph) {
                 next_partition = pattern_generator.inc_next();
@@ -117,8 +117,7 @@ pub mod planning {
     fn update_graph_labels(
         graph: &mut Graph,
         partition: &[usize],
-        node_priorities: &[usize],
-        authorizations: &Vec<Vec<usize>>,
+        node_priorities: &[usize]
     ) {
         for id in &mut graph.nodes_id {
             *id = -1;

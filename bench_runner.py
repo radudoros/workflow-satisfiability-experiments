@@ -8,10 +8,9 @@ from collections import defaultdict
 
 import matplotlib.pyplot as plt
 
-# Whitelist of instance types to run
-whitelist = ['SoD', 'AM3']  # Add the types you want here
+allowlist = ['ADA', 'AM3', 'SoD', 'SUAL', 'WL']  # Add the types you want here
 
-time_limit = 60
+time_limit = 180
 
 # Custom sorting function
 def custom_sort_key(instance_name):
@@ -40,21 +39,24 @@ def main():
     if os.path.exists('avg_times.json'):
         global avg_times_by_type
         avg_times_by_type = read_from_json('avg_times.json')
-        return
 
     # Loop through instance types (ADA, AM3, etc.)
     for instance_type in sorted(os.listdir(root_dir), key=custom_sort_key):
         main_type, k_value, n_value = instance_type.split()
         k_value, n_value = int(k_value), int(n_value)
 
-        # Skip if the type is not in the whitelist
-        if main_type not in whitelist:
+        if main_type not in allowlist:
+            continue
+
+        # Skip if this k_value is already processed and stored in avg_times_by_type
+        if k_value in [d.get('k', None) for condition in avg_times_by_type.get(main_type, {}).values() for d in condition]:
+            # print(f'Skipping {instance_type} as k_value {k_value} is already processed.')
             continue
 
         # Stop if n is above the threshold
-        if k_value > 32:
-            print(f'Skipping {instance_type} as n_value {n_value} is above threshold.')
-            break
+        if k_value > 37:
+            # print(f'Skipping {instance_type} as n_value {n_value} is above threshold.')
+            continue
 
         instance_type_path = os.path.join(root_dir, instance_type)
 
@@ -73,7 +75,7 @@ def main():
         total_time = 0
         successful_runs = 0
 
-        max_instances = 5  # Substitute with your desired maximum number of instances
+        max_instances = 10  # Substitute with your desired maximum number of instances
         instances_run = 0  # Counter to keep track of instances run
 
         # Loop through sorted instances
