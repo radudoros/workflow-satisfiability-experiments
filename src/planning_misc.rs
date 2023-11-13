@@ -29,6 +29,20 @@ pub mod planning_misc {
             }
         }
 
+        fn print_progress(&self) {
+            if let Some(index) = self.current_index {
+                // Only take into account the first (index + 1) selected_nodes
+                let relevant_nodes = &self.selected_nodes[0..=index];
+
+                let current_indices: Vec<i32> = relevant_nodes
+                    .iter()
+                    .map(|&node| self.auth_set_indices[node])
+                    .collect();
+
+                println!("Current Indices: {:?}", current_indices);
+            }
+        }
+
         pub fn next(&mut self) -> Option<&[i32]> {
             while let Some(index) = self.current_index {
                 if index == self.selected_nodes.len() {
@@ -38,6 +52,8 @@ pub mod planning_misc {
 
                 let current_node_index = self.selected_nodes[index];
                 self.auth_set_indices[current_node_index] += 1;
+
+                self.print_progress();
                 let auth_len = self.auth_sets[current_node_index].len() as i32;
                 if self.auth_set_indices[current_node_index] >= auth_len {
                     self.g.nodes_id[current_node_index] = -1;
@@ -53,6 +69,74 @@ pub mod planning_misc {
 
                 if self.preds.eval(&self.g) {
                     self.current_index = Some(index + 1);
+                }
+            }
+
+            None
+        }
+
+        pub fn smart_next(&mut self, ui_pred: &BinaryPredicateSet) -> Option<&[i32]> {
+            let mut conflict_set: Vec<usize> = vec![];
+            while let Some(index) = self.current_index {
+                if index == self.selected_nodes.len() {
+                    self.current_index = Some(index - 1);
+                    return Some(&self.g.nodes_id);
+                }
+
+                let current_node_index = self.selected_nodes[index];
+                self.auth_set_indices[current_node_index] += 1;
+
+                let auth_len = self.auth_sets[current_node_index].len() as i32;
+
+                self.print_progress();
+                if self.auth_set_indices[current_node_index] >= auth_len {
+                    self.g.nodes_id[current_node_index] = -1;
+                    self.auth_set_indices[current_node_index] = -1;
+                    if index == 0 {
+                        self.current_index = None;
+                        break;
+                    }
+
+                    if !conflict_set.is_empty() {
+                        let best_jump_point = conflict_set
+                            .iter()
+                            .max_by_key(|&&node_idx| {
+                                self.selected_nodes
+                                    .iter()
+                                    .position(|&selected_node_idx| selected_node_idx == node_idx)
+                            })
+                            .copied();
+
+                        if let Some(best_point) = best_jump_point {
+                            self.current_index = self.selected_nodes
+                                .iter()
+                                .position(|&selected_node_idx| selected_node_idx == best_point);
+                        } else {
+                            self.current_index = Some(index - 1);
+                        }
+                
+                        conflict_set.clear(); // Clear the conflict set for the next iteration
+                        continue;
+                    }
+
+                    self.current_index =  Some(index - 1);
+                    continue;
+                }
+
+                let idx = self.auth_set_indices[current_node_index] as usize;
+                self.g.nodes_id[current_node_index] = self.auth_sets[current_node_index][idx];
+
+                let preds_result = self.preds.eval_idx(&self.g, current_node_index);
+                let ui_pred_result = ui_pred.eval_idx(&self.g, current_node_index);
+                
+                match (preds_result, ui_pred_result) {
+                    (Ok(()), Ok(())) => {
+                        self.current_index = Some(index + 1);
+                    },
+                    (Err(Some(pred_prev)), _) | (_, Err(Some(pred_prev))) => {
+                        conflict_set.push(pred_prev);
+                    },
+                    _ => ()
                 }
             }
 

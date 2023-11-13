@@ -1,47 +1,43 @@
+use crate::back_jumping_predicate::ScopedPredicate;
 use crate::workflow::Graph;
-use std::collections::HashSet;
 use std::cell::RefCell;
+use std::collections::HashSet;
 use std::io::{BufRead, BufReader, Read};
 use std::rc::Rc;
 
-type BinaryPredicate = dyn Fn(&Graph) -> bool;
-
 #[derive(Default)]
 pub struct BinaryPredicateSet {
-    preds: Vec<Box<BinaryPredicate>>,
-    // predicate location id (to identify sites' predicates)
-    pred_loc: Vec<i32>,
+    // preds: Vec<Box<BinaryPredicate>>,
+    pub preds: Vec<ScopedPredicate>, // predicate location id (to identify sites' predicates)
+                                 // pred_loc: Vec<i32>,
 }
 
 impl BinaryPredicateSet {
     #[allow(dead_code)]
     pub fn eval(&self, g: &Graph) -> bool {
         for p in self.preds.iter() {
-            if !p(g) {
+            if !p.eval(g) {
                 return false;
             }
         }
 
         true
+    }
+
+    pub fn eval_idx(&self, g: &Graph, idx: usize) -> Result<(), Option<usize>> {
+        // we can use the index to skip if it is not in set...
+
+        for p in self.preds.iter() {
+            if !p.eval_smart(g, idx) {
+                return Err(p.get_prev(idx));
+            }
+        }
+
+        Ok(())
     }
 
     pub fn len(&self) -> usize {
         self.preds.len()
-    }
-
-    #[allow(dead_code)]
-    pub fn filtered_eval(&self, g: &Graph, filtered_in: i32) -> bool {
-        for (i, p) in self.preds.iter().enumerate() {
-            if self.pred_loc[i] != filtered_in {
-                continue;
-            }
-
-            if !p(g) {
-                return false;
-            }
-        }
-
-        true
     }
 }
 
@@ -55,15 +51,9 @@ pub struct ReadConstraintsResult {
 }
 
 pub fn read_constraints<R: Read>(reader: R) -> std::io::Result<ReadConstraintsResult> {
-    let mut ui_set = BinaryPredicateSet {
-        preds: vec![],
-        pred_loc: vec![],
-    };
+    let mut ui_set = BinaryPredicateSet { preds: vec![] };
 
-    let mut non_ui_set = BinaryPredicateSet {
-        preds: vec![],
-        pred_loc: vec![],
-    };
+    let mut non_ui_set = BinaryPredicateSet { preds: vec![] };
 
     let mut non_ui_nodes: Vec<usize> = Vec::new();
 
@@ -151,10 +141,12 @@ pub fn read_constraints<R: Read>(reader: R) -> std::io::Result<ReadConstraintsRe
                 step_predicate_counts[x] += 1;
                 step_predicate_counts[y] += 1;
 
-                ui_set.preds.push(Box::new(move |g: &Graph| {
-                    g.nodes_id[x] == -1 || g.nodes_id[y] == -1 || g.nodes_id[x] != g.nodes_id[y]
-                }));
-                ui_set.pred_loc.push(-1);
+                ui_set.preds.push(ScopedPredicate {
+                    pred: Box::new(move |g: &Graph| {
+                        g.nodes_id[x] == -1 || g.nodes_id[y] == -1 || g.nodes_id[x] != g.nodes_id[y]
+                    }),
+                    scope: vec![x, y],
+                });
             }
             Some("bod") => {
                 // Get the node IDs from the third and fourth positions
@@ -164,10 +156,12 @@ pub fn read_constraints<R: Read>(reader: R) -> std::io::Result<ReadConstraintsRe
                 step_predicate_counts[x] += 100;
                 step_predicate_counts[y] += 100;
 
-                ui_set.preds.push(Box::new(move |g: &Graph| {
-                    g.nodes_id[x] == -1 || g.nodes_id[y] == -1 || g.nodes_id[x] == g.nodes_id[y]
-                }));
-                ui_set.pred_loc.push(-1);
+                ui_set.preds.push(ScopedPredicate {
+                    pred: Box::new(move |g: &Graph| {
+                        g.nodes_id[x] == -1 || g.nodes_id[y] == -1 || g.nodes_id[x] == g.nodes_id[y]
+                    }),
+                    scope: vec![x, y],
+                });
             }
             Some("at") if parts.get(1).map(String::as_str) == Some("most") => {
                 // Handle the "at most" constraint
@@ -178,28 +172,32 @@ pub fn read_constraints<R: Read>(reader: R) -> std::io::Result<ReadConstraintsRe
                     .collect();
 
                 for &node in &nodes {
-                    step_predicate_counts[node] += 10;
+                    step_predicate_counts[node] += 100;
                 }
+
+                let scope_arg = nodes.clone();
 
                 // Hack, preallocate and capture it in the closure
                 let shared_vec = Rc::new(RefCell::new(Vec::with_capacity(max_count)));
 
-                ui_set.preds.push(Box::new(move |g: &Graph| {
-                    let mut unique_ids = shared_vec.borrow_mut();
-                    unique_ids.clear();
+                ui_set.preds.push(ScopedPredicate {
+                    pred: Box::new(move |g: &Graph| {
+                        let mut unique_ids = shared_vec.borrow_mut();
+                        unique_ids.clear();
 
-                    for &node in &nodes {
-                        let id = g.nodes_id[node];
-                        if id != -1 && !unique_ids.contains(&id) {
-                            unique_ids.push(id);
-                            if unique_ids.len() > max_count {
-                                return false;
+                        for &node in &nodes {
+                            let id = g.nodes_id[node];
+                            if id != -1 && !unique_ids.contains(&id) {
+                                unique_ids.push(id);
+                                if unique_ids.len() > max_count {
+                                    return false;
+                                }
                             }
                         }
-                    }
-                    true
-                }));
-                ui_set.pred_loc.push(-1);
+                        true
+                    }),
+                    scope: scope_arg,
+                });
             }
             Some("assignment-dependent") => {
                 let scope_indices: Vec<usize> = vec![
@@ -226,15 +224,35 @@ pub fn read_constraints<R: Read>(reader: R) -> std::io::Result<ReadConstraintsRe
                 step_predicate_counts[scope_indices[0]] += 5;
                 step_predicate_counts[scope_indices[1]] += 5;
 
-                non_ui_set.preds.push(Box::new(move |g: &Graph| {
-                    let user1 = g.nodes_id[scope_indices[0]];
-                    let user2 = g.nodes_id[scope_indices[1]];
-                    user1 == -1
-                        || user2 == -1
-                        || !users_set1.contains(&user1)
-                        || (users_set1.contains(&user1) && users_set2.contains(&user2))
-                }));
-                non_ui_set.pred_loc.push(-1);
+                let cache: Rc<RefCell<Option<(i32, i32, bool)>>> = Rc::new(RefCell::new(None));
+
+                let scope_arg = scope_indices.clone();
+
+                non_ui_set.preds.push(ScopedPredicate {
+                    pred: Box::new(move |g: &Graph| {
+                        let user1 = g.nodes_id[scope_indices[0]];
+                        let user2 = g.nodes_id[scope_indices[1]];
+
+                        // Check cache
+                        if let Some((cached_u1, cached_u2, result)) = *cache.borrow() {
+                            if cached_u1 == user1 && cached_u2 == user2 {
+                                return result;
+                            }
+                        }
+
+                        let result = user1 == -1
+                            || user2 == -1
+                            || !users_set1.contains(&user1)
+                            || (users_set1.contains(&user1) && users_set2.contains(&user2));
+
+                        // Update cache
+                        if user1 != -1 && user2 != -1 && result {
+                            *cache.borrow_mut() = Some((user1, user2, result));
+                        }
+                        result
+                    }),
+                    scope: scope_arg,
+                });
             }
             Some("wang-li") => {
                 let scope_indices: Vec<usize> = vec![
@@ -247,7 +265,8 @@ pub fn read_constraints<R: Read>(reader: R) -> std::io::Result<ReadConstraintsRe
                     .split(|s| s == ")")
                     .filter(|group| !group.is_empty())
                     .map(|group| {
-                        group.iter()
+                        group
+                            .iter()
                             .filter(|&s| s != "(" && s != ")")
                             .filter_map(|s| s.parse().ok())
                             .map(|x: i32| x - 1)
@@ -265,39 +284,44 @@ pub fn read_constraints<R: Read>(reader: R) -> std::io::Result<ReadConstraintsRe
                     step_predicate_counts[si] += 5;
                 }
 
+                let scope_arg = scope_indices.clone();
 
-                non_ui_set.preds.push(Box::new(move |g: &Graph| {
-                    let mut crt_set: Option<usize> = None;
-                    for &s in &scope_indices {
-                        let node_id = g.nodes_id[s];
-                        if node_id == -1 {
-                            continue;
-                        }
+                non_ui_set.preds.push(ScopedPredicate {
+                    pred: Box::new(move |g: &Graph| {
+                        let mut crt_set: Option<usize> = None;
+                        for &s in &scope_indices {
+                            let node_id = g.nodes_id[s];
+                            if node_id == -1 {
+                                continue;
+                            }
 
-                        match crt_set {
-                            None => {
-                                // This is the first assigned item; find the first set containing the user.
-                                crt_set = user_sets.iter().position(|set| set.contains(&node_id));
-                                if crt_set.is_none() {
-                                    // If no set contains the user, the constraint is violated.
-                                    return false;
+                            match crt_set {
+                                None => {
+                                    // This is the first assigned item; find the first set containing the user.
+                                    crt_set =
+                                        user_sets.iter().position(|set| set.contains(&node_id));
+                                    if crt_set.is_none() {
+                                        // If no set contains the user, the constraint is violated.
+                                        return false;
+                                    }
+                                }
+                                Some(set_idx) => {
+                                    // All further nodes must belong to the same set as the first.
+                                    if !user_sets[set_idx].contains(&node_id) {
+                                        return false;
+                                    }
                                 }
                             }
-                            Some(set_idx) => {
-                                // All further nodes must belong to the same set as the first.
-                                if !user_sets[set_idx].contains(&node_id) {
-                                    return false;
-                                }
-                            }
                         }
-                    }
-                    true
-                }));
-                non_ui_set.pred_loc.push(-1);
+                        true
+                    }),
+                    scope: scope_arg,
+                });
             }
             Some("sual") => {
                 // Handle the SUAL constraint
-                let limit: usize = parts.get(parts.iter().position(|s| s == "limit").unwrap_or(0) + 1)
+                let limit: usize = parts
+                    .get(parts.iter().position(|s| s == "limit").unwrap_or(0) + 1)
                     .and_then(|s| s.parse().ok())
                     .unwrap_or(0);
                 let users_start = parts.iter().position(|s| s == "users").unwrap_or(0) + 1;
@@ -309,7 +333,11 @@ pub fn read_constraints<R: Read>(reader: R) -> std::io::Result<ReadConstraintsRe
 
                 // Locate and parse the scope
                 let scope_start = parts.iter().position(|s| s == "scope").unwrap_or(0) + 1;
-                let scope_end = parts.iter().position(|s| s == "limit").unwrap_or(parts.len()) - 1;
+                let scope_end = parts
+                    .iter()
+                    .position(|s| s == "limit")
+                    .unwrap_or(parts.len())
+                    - 1;
                 let scope_indices: Vec<usize> = parts[scope_start..scope_end]
                     .iter()
                     .filter_map(|s| s.parse().ok())
@@ -322,30 +350,35 @@ pub fn read_constraints<R: Read>(reader: R) -> std::io::Result<ReadConstraintsRe
                     }
                 }
 
-                non_ui_set.preds.push(Box::new(move |g: &Graph| {
-                    let mut assigned_users = Vec::new();
+                let scope_arg = scope_indices.clone();
 
-                    for &step in &scope_indices {
-                        let user = g.nodes_id[step];
-                        if user != -1 {
-                            assigned_users.push(user as usize);
-                        }
-                    }
+                non_ui_set.preds.push(ScopedPredicate {
+                    pred: Box::new(move |g: &Graph| {
+                        let mut assigned_users = Vec::new();
 
-                    let unique_users_count = assigned_users.iter().collect::<HashSet<_>>().len();
-
-                    if unique_users_count <= limit {
-                        // All assigned users should be super users
-                        for user in assigned_users {
-                            if !super_users.contains(&user) {
-                                return false;
+                        for &step in &scope_indices {
+                            let user = g.nodes_id[step];
+                            if user != -1 {
+                                assigned_users.push(user as usize);
                             }
                         }
-                    }
 
-                    true
-                }));
-                non_ui_set.pred_loc.push(-1);
+                        let unique_users_count =
+                            assigned_users.iter().collect::<HashSet<_>>().len();
+
+                        if unique_users_count <= limit {
+                            // All assigned users should be super users
+                            for user in assigned_users {
+                                if !super_users.contains(&user) {
+                                    return false;
+                                }
+                            }
+                        }
+
+                        true
+                    }),
+                    scope: scope_arg,
+                });
             }
             // Add other predicates as needed
             // ...
@@ -381,55 +414,56 @@ pub fn read_constraints<R: Read>(reader: R) -> std::io::Result<ReadConstraintsRe
 }
 
 pub fn generate_mock_ui_predicates() -> BinaryPredicateSet {
-    let mut v: Vec<Box<BinaryPredicate>> = Vec::new();
-    v.push(Box::new(|g: &Graph| {
-        // policy: don't allow a step and its child step to be same:
-        for (v, adj) in g.adjacency_list.iter().enumerate() {
-            if g.nodes_id[v] == -1 {
-                continue;
-            }
-            for neigh in adj.iter() {
-                if g.nodes_id[v] == g.nodes_id[*neigh] {
-                    return false;
+    let mut v: Vec<ScopedPredicate> = Vec::new();
+    v.push(ScopedPredicate {
+        pred: Box::new(|g: &Graph| {
+            // policy: don't allow a step and its child step to be same:
+            for (v, adj) in g.adjacency_list.iter().enumerate() {
+                if g.nodes_id[v] == -1 {
+                    continue;
+                }
+                for neigh in adj.iter() {
+                    if g.nodes_id[v] == g.nodes_id[*neigh] {
+                        return false;
+                    }
                 }
             }
-        }
 
-        true
-    }));
+            true
+        }),
+        scope: vec![],
+    });
 
-    let mut ids: Vec<i32> = Vec::new();
-    for i in 0..v.len() as i32 {
-        ids.push(i);
-    }
-
-    BinaryPredicateSet {
-        preds: v,
-        pred_loc: ids,
-    }
+    BinaryPredicateSet { preds: v }
 }
 
 #[allow(dead_code)]
 pub fn generate_mock_ud_predicates() -> BinaryPredicateSet {
-    let mut v: Vec<Box<BinaryPredicate>> = Vec::new();
+    let mut v: Vec<ScopedPredicate> = Vec::new();
 
-    v.push(Box::new(|_| true));
-    v.push(Box::new(|g: &Graph| {
-        g.nodes_id.len() < 2 || g.nodes_id[2] == -1 || g.nodes_id[2] == 1
-    }));
-    v.push(Box::new(|g: &Graph| {
-        g.nodes_id.len() < 1 || g.nodes_id[1] == -1 || g.nodes_id[1] == 2
-    }));
+    v.push(ScopedPredicate {
+        pred: Box::new(|_| true),
+        scope: vec![],
+    });
+    v.push(ScopedPredicate {
+        pred: Box::new(|g: &Graph| {
+            g.nodes_id.len() < 2 || g.nodes_id[2] == -1 || g.nodes_id[2] == 1
+        }),
+        scope: vec![],
+    });
+    v.push(ScopedPredicate {
+        pred: Box::new(|g: &Graph| {
+            g.nodes_id.len() < 1 || g.nodes_id[1] == -1 || g.nodes_id[1] == 2
+        }),
+        scope: vec![],
+    });
 
     let mut ids: Vec<i32> = Vec::new();
     for i in 0..v.len() as i32 {
         ids.push(i);
     }
 
-    BinaryPredicateSet {
-        preds: v,
-        pred_loc: ids,
-    }
+    BinaryPredicateSet { preds: v }
 }
 
 #[cfg(test)]

@@ -114,11 +114,7 @@ pub mod planning {
     }
 
     /// Update node labels in the graph based on the given partition.
-    fn update_graph_labels(
-        graph: &mut Graph,
-        partition: &[usize],
-        node_priorities: &[usize]
-    ) {
+    fn update_graph_labels(graph: &mut Graph, partition: &[usize], node_priorities: &[usize]) {
         for id in &mut graph.nodes_id {
             *id = -1;
         }
@@ -245,7 +241,7 @@ pub mod planning {
             .collect();
 
         let mut generator = Generator::new(g, genneral_preds, &general_nodes, auth_i32);
-        while let Some(solution) = generator.next() {
+        while let Some(solution) = generator.smart_next(ui_preds) {
             // 1. check first if the solution and the authentication sets intersect:
             let mut ok = true;
             for (index, label) in solution.iter().enumerate() {
