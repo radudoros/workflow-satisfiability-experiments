@@ -99,41 +99,42 @@ pub mod planning_misc {
                         break;
                     }
 
-                    if !self.conflict_sets[index].is_empty() {
-                        let best_jump_point = self.conflict_sets[index]
-                            .iter()
-                            .max_by_key(|&&node_idx| {
-                                self.selected_nodes
-                                    .iter()
-                                    .position(|&selected_node_idx| selected_node_idx == node_idx)
-                            })
-                            .copied();
+                    // if !self.conflict_sets[index].is_empty() {
+                    //     let best_jump_point = self.conflict_sets[index]
+                    //         .iter()
+                    //         .max_by_key(|&&node_idx| {
+                    //             self.selected_nodes
+                    //                 .iter()
+                    //                 .position(|&selected_node_idx| selected_node_idx == node_idx)
+                    //         })
+                    //         .copied();
 
-                        if let Some(best_point) = best_jump_point {
-                            let best_point_index = self
-                                .selected_nodes
-                                .iter()
-                                .position(|&selected_node_idx| selected_node_idx == best_point)
-                                .unwrap_or(index);
+                    //     if let Some(best_point) = best_jump_point {
+                    //         let best_point_index = self
+                    //             .selected_nodes
+                    //             .iter()
+                    //             .position(|&selected_node_idx| selected_node_idx == best_point)
+                    //             .unwrap_or(index);
 
-                            // Clear conflict sets between best_jump_point and current index
-                            for conflict_index in best_point_index..index {
-                                self.conflict_sets[conflict_index].clear();
-                            }
+                    //         // Clear conflict sets between best_jump_point and current index
+                    //         for conflict_index in best_point_index..index {
+                    //             self.conflict_sets[conflict_index].clear();
+                    //         }
 
-                            self.current_index = Some(best_point_index);
+                    //         self.current_index = Some(best_point_index);
 
-                            // self.current_index = self.selected_nodes
-                            //     .iter()
-                            //     .position(|&selected_node_idx| selected_node_idx == best_point);
-                        } else {
-                            self.current_index = Some(index - 1);
-                        }
+                    //         // self.current_index = self.selected_nodes
+                    //         //     .iter()
+                    //         //     .position(|&selected_node_idx| selected_node_idx == best_point);
+                    //     } else {
+                    //         self.current_index = Some(index - 1);
+                    //     }
 
-                        self.conflict_sets[index].clear(); // Clear the conflict set for the next iteration
-                        continue;
-                    }
+                    //     self.conflict_sets[index].clear(); // Clear the conflict set for the next iteration
+                    //     continue;
+                    // }
 
+                    self.conflict_sets[index].clear();
                     self.current_index = Some(index - 1);
                     continue;
                 }

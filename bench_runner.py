@@ -122,7 +122,12 @@ def main():
             # Measure time and execute Rust binary
             start_time = time.time()
             cmd = f"timeout {time_limit} {rust_binary_path} \"{instance_path}\""
-            result = subprocess.run(cmd, shell=True, capture_output=True)
+            if sys.version_info >= (3, 7):
+                # For Python 3.7 and above
+                result = subprocess.run(cmd, shell=True, capture_output=True)
+            else:
+                # For Python 3.6 and below
+                result = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             elapsed_time = time.time() - start_time
 
             stdout_str = result.stdout.decode('utf-8')
