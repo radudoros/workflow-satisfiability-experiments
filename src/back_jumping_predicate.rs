@@ -27,11 +27,15 @@ impl ScopedPredicate {
 
         true
     }
-    
+
     pub fn get_prev(&self, idx: usize) -> Option<usize> {
         for (i, node_idx) in self.scope.iter().enumerate() {
             if node_idx == &idx {
-                return if i == 0 {None} else {Some(self.scope[i - 1])}
+                return if i == 0 {
+                    None
+                } else {
+                    Some(self.scope[i - 1])
+                };
             }
         }
 

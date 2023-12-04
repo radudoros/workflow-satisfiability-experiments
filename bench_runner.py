@@ -15,8 +15,9 @@ from solver_ortools_pbpb import solve_pbpb
 from datatypes import Instance
 
 allowlist = ['ADA', 'AM3', 'SoD', 'SUAL', 'WL']  # Add the types you want here
+# allowlist = ['SUAL']
 
-time_limit = 180
+time_limit = 15
 
 # Custom sorting function
 def custom_sort_key(instance_name):
@@ -31,7 +32,11 @@ def instance_sort_key(instance_name):
     return int(instance_name.split('instance')[1].split('.txt')[0])
 
 # Initialize a dictionary to hold average times by instance type
-avg_times_by_type = defaultdict(lambda: {'k=18': [], 'k=18_baseline': [], 'n=10k': [], 'n=10k_baseline': []})
+avg_times_by_type = defaultdict(lambda: {
+    'k=18': [], 'k=18_baseline': [], 
+    'n=10k': [], 'n=10k_baseline': [],
+    'n=k': [], 'n=k_baseline': []  # Add this new category
+})
 
 def main():
     parser = argparse.ArgumentParser(description='Run benchmarks.')
@@ -112,6 +117,8 @@ def main():
                 print(f'Stopping: Max number of instances ({max_instances}) have been run.')
                 break
             
+            # print(f'We are running {instance_path}')
+
             # Measure time and execute Rust binary
             start_time = time.time()
             cmd = f"timeout {time_limit} {rust_binary_path} \"{instance_path}\""
@@ -121,11 +128,16 @@ def main():
             stdout_str = result.stdout.decode('utf-8')
             if "Found a solution" in stdout_str:
                 found_solution = True
+                print(f'Solution here!')
             else:
                 found_solution = False
 
-            if baseline_solution_found != found_solution:
+            if result.returncode == 0 and baseline_solution_found != found_solution:
                 print(f'We found a bug for {instance_path}')
+                if baseline_solution_found:
+                    predefined_order = [6, 8, 1, 10, 2, 7, 0, 5, 3, 9, 4]
+                    zipped_output = [(idx, solution.assignment[idx]) for idx in predefined_order]
+                    print(f'Baseline has solution {zipped_output}')
                 return
 
             instances_run += 1  # Increment the counter
@@ -158,9 +170,12 @@ def main():
             if n_value == 10 * k_value:
                 avg_times_by_type[main_type]['n=10k'].append({'k': k_value, 'avg_time': average_time})
                 avg_times_by_type[main_type]['n=10k_baseline'].append({'k': k_value, 'avg_time': average_baseline_time})
+            if n_value == k_value:
+                avg_times_by_type[main_type]['n=k'].append({'k': k_value, 'avg_time': average_time})
+                avg_times_by_type[main_type]['n=k_baseline'].append({'k': k_value, 'avg_time': average_baseline_time})
 
         # incremental: save each time we run
-        save_to_json(avg_times_by_type, 'avg_times.json')
+        # save_to_json(avg_times_by_type, 'avg_times.json')
     
 
 # Function to plot line chart by condition
@@ -181,15 +196,24 @@ def plot_chart(condition):
     elif condition == 'n=10k':
         plt.xlabel('k value')
         plt.xlim(15, 60)
+    elif condition == 'n=k':
+        plt.xlabel('k value (where n=k)')
 
 
     for instance_type, conditions in avg_times_by_type.items():
         avg_times = conditions[condition]
         avg_baseline_times = conditions[f"{condition}_baseline"]
-        x_values = sorted([d['k' if condition == 'n=10k' else 'n'] for d in avg_times])
-        y_values = [d['avg_time'] for d in sorted(avg_times, key=lambda d: d['k' if condition == 'n=10k' else 'n'])]
-        x_values_baseline = sorted([d['k' if condition == 'n=10k' else 'n'] for d in avg_baseline_times])
-        y_values_baseline = [d['avg_time'] for d in sorted(avg_baseline_times, key=lambda d: d['k' if condition == 'n=10k' else 'n'])]
+
+        # Determine the key for sorting based on the condition
+        if condition in ['n=10k', 'n=k']:
+            sort_key = 'k'
+        else:
+            sort_key = 'n'  # Default case, adjust if necessary
+
+        x_values = sorted([d[sort_key] for d in avg_times])
+        y_values = [d['avg_time'] for d in sorted(avg_times, key=lambda d: d[sort_key])]
+        x_values_baseline = sorted([d[sort_key] for d in avg_baseline_times])
+        y_values_baseline = [d['avg_time'] for d in sorted(avg_baseline_times, key=lambda d: d[sort_key])]
 
         plt.plot(x_values, y_values, label=instance_type)
         plt.plot(x_values_baseline, y_values_baseline, linestyle='--', label=f"{instance_type} Baseline")
@@ -215,3 +239,6 @@ plot_chart('k=18')
 
 # Generate line chart for n = 10k
 plot_chart('n=10k')
+
+# Generate line chart for n=k
+plot_chart('n=k')

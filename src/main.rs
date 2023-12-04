@@ -6,12 +6,11 @@ use planner::planning::planning::plan_all;
 use planner::predicates::{read_constraints, ReadConstraintsResult};
 use planner::workflow::Graph;
 
+use std::cmp::Ordering;
 use std::env;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
-use std::cmp::Ordering;
-
 
 #[cfg(test)]
 mod tests {
@@ -180,25 +179,29 @@ fn main() {
         auth_sets,
         node_priorities,
         num_users,
-        non_ui_nodes,
+        mut non_ui_nodes,
     } = read_constraints(reader).unwrap();
+
+    non_ui_nodes.sort_by(|&a, &b| node_priorities[b].cmp(&node_priorities[a]));
 
     let cmp = Box::new(|&a: &usize, &b: &usize| {
         let a_is_non_ui = non_ui_nodes.contains(&a);
         let b_is_non_ui = non_ui_nodes.contains(&b);
-        
+
         if a_is_non_ui && !b_is_non_ui {
             return Ordering::Less;
         }
         if !a_is_non_ui && b_is_non_ui {
             return Ordering::Greater;
         }
-        
+
         node_priorities[b].cmp(&node_priorities[a])
     });
 
     let mut node_indices: Vec<usize> = (0..node_priorities.len()).collect();
     node_indices.sort_by(&cmp);
+
+    println!("indexes: {:?}", node_indices);
 
     for pred in non_ui_set.preds.iter_mut() {
         pred.scope.sort_by(&cmp);
@@ -213,7 +216,7 @@ fn main() {
 
     // sort all predicates by the numbers seen in the node_indeces also...
     // Then we need to find a way... what if we cannot go back in ui scopess......
-    // We need to see if we can: 
+    // We need to see if we can:
     // If we would go outside of the non-ui scope then we just go simply to 0
 
     // we can also port with us a mapping of the old nodes to new sorted nodes
@@ -228,9 +231,7 @@ fn main() {
         &vec![1, 2, 3],
         num_users,
     ) {
-        Some(ans) => {
-            ans
-        }
+        Some(ans) => ans,
         None => {
             eprintln!("No solutions found!");
             return;

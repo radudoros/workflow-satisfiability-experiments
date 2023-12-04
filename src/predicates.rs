@@ -9,7 +9,7 @@ use std::rc::Rc;
 pub struct BinaryPredicateSet {
     // preds: Vec<Box<BinaryPredicate>>,
     pub preds: Vec<ScopedPredicate>, // predicate location id (to identify sites' predicates)
-                                 // pred_loc: Vec<i32>,
+                                     // pred_loc: Vec<i32>,
 }
 
 impl BinaryPredicateSet {
@@ -25,15 +25,25 @@ impl BinaryPredicateSet {
     }
 
     pub fn eval_idx(&self, g: &Graph, idx: usize) -> Result<(), Option<usize>> {
-        // we can use the index to skip if it is not in set...
+        let mut max_prev: Option<usize> = None;
 
         for p in self.preds.iter() {
             if !p.eval_smart(g, idx) {
-                return Err(p.get_prev(idx));
+                let prev = p.get_prev(idx);
+                max_prev = match (max_prev, prev) {
+                    (Some(max), Some(current)) => Some(max.max(current)),
+                    (None, Some(current)) => Some(current),
+                    (current, None) => current,
+                    _ => None,
+                };
             }
         }
 
-        Ok(())
+        if let Some(prev) = max_prev {
+            Err(Some(prev))
+        } else {
+            Ok(())
+        }
     }
 
     pub fn len(&self) -> usize {
@@ -214,11 +224,11 @@ pub fn read_constraints<R: Read>(reader: R) -> std::io::Result<ReadConstraintsRe
                 let and_index = parts.iter().position(|s| s == "and").unwrap_or(0);
                 let users_set1: Vec<i32> = parts[5..and_index]
                     .iter()
-                    .filter_map(|s| s.parse().ok())
+                    .filter_map(|s| s.parse::<i32>().ok().map(|num| num - 1))
                     .collect();
                 let users_set2: Vec<i32> = parts[and_index + 1..]
                     .iter()
-                    .filter_map(|s| s.parse().ok())
+                    .filter_map(|s| s.parse::<i32>().ok().map(|num| num - 1))
                     .collect();
 
                 step_predicate_counts[scope_indices[0]] += 5;
@@ -256,8 +266,8 @@ pub fn read_constraints<R: Read>(reader: R) -> std::io::Result<ReadConstraintsRe
             }
             Some("wang-li") => {
                 let scope_indices: Vec<usize> = vec![
-                    parts.get(2).and_then(|s| s.parse().ok()).unwrap_or(0),
-                    parts.get(3).and_then(|s| s.parse().ok()).unwrap_or(0),
+                    parts.get(2).and_then(|s| s.parse().ok()).unwrap_or(0) - 1,
+                    parts.get(3).and_then(|s| s.parse().ok()).unwrap_or(0) - 1,
                 ];
 
                 let user_sets_start = parts.iter().position(|s| s == "groups").unwrap_or(0) + 1;
@@ -336,8 +346,7 @@ pub fn read_constraints<R: Read>(reader: R) -> std::io::Result<ReadConstraintsRe
                 let scope_end = parts
                     .iter()
                     .position(|s| s == "limit")
-                    .unwrap_or(parts.len())
-                    - 1;
+                    .unwrap_or(parts.len());
                 let scope_indices: Vec<usize> = parts[scope_start..scope_end]
                     .iter()
                     .filter_map(|s| s.parse().ok())
@@ -355,12 +364,18 @@ pub fn read_constraints<R: Read>(reader: R) -> std::io::Result<ReadConstraintsRe
                 non_ui_set.preds.push(ScopedPredicate {
                     pred: Box::new(move |g: &Graph| {
                         let mut assigned_users = Vec::new();
+                        let mut assigned_steps = 0;
 
                         for &step in &scope_indices {
                             let user = g.nodes_id[step];
                             if user != -1 {
                                 assigned_users.push(user as usize);
+                                assigned_steps += 1;
                             }
+                        }
+
+                        if assigned_steps < scope_indices.len() {
+                            return true;
                         }
 
                         let unique_users_count =
