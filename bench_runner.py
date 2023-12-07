@@ -6,9 +6,6 @@ import time
 
 from collections import defaultdict
 
-import matplotlib.pyplot as plt
-
-
 import sys
 sys.path.append('./solvers')
 from solver_ortools_pbpb import solve_pbpb
@@ -42,10 +39,20 @@ def main():
     parser = argparse.ArgumentParser(description='Run benchmarks.')
     parser.add_argument('--rust-binary-path', type=str, help='Path to the Rust binary')
     parser.add_argument('--root-dir', type=str, help='Root directory containing workloads')
+    parser.add_argument('--task-id', type=str, help='Task Id')
+    parser.add_argument('--task-nr', type=str, help='Number of tasks')
 
     args = parser.parse_args()
     rust_binary_path = args.rust_binary_path
     root_dir = args.root_dir
+    task_id = int(args.task_id)
+    task_nr = int(args.task_nr)
+
+    max_instances = 100
+    instances_per_task = max_instances // task_nr
+
+    start_instance = task_id * instances_per_task
+    end_instance = (task_id + 1) * instances_per_task
 
     if os.path.exists('avg_times.json'):
         global avg_times_by_type
@@ -58,15 +65,6 @@ def main():
 
         if main_type not in allowlist:
             continue
-
-        if n_value == k_value * 10:
-            if any(d.get('k', None) == k_value for d in avg_times_by_type.get(main_type, {}).get('n=10k', [])):
-                print(f"Skipping because k={k_value} is already processed for n=10k")
-                continue
-        else:
-            if any(d.get('n', None) == n_value for d in avg_times_by_type.get(main_type, {}).get('k=18', [])):
-                print(f"Skipping because n={n_value} is already processed for k=18")
-                continue
 
         # Skip if this k_value is already processed and stored in avg_times_by_type
         # if k_value in [d.get('k', None) for d in avg_times_by_type.get(main_type, {}).get('n=10k', [])]:
@@ -95,13 +93,11 @@ def main():
         total_time = 0
         successful_runs = 0
 
-        max_instances = 100  # Substitute with your desired maximum number of instances
-        instances_run = 0  # Counter to keep track of instances run
-
+        instances_run = 0
         total_baseline = 0
 
         # Loop through sorted instances
-        for instance in sorted_instances:
+        for instance in sorted_instances[start_instance:end_instance]:
             instance_path = os.path.join(instance_type_path, instance)
 
             solver_intance = Instance(instance_path)
@@ -173,60 +169,14 @@ def main():
                 avg_times_by_type[main_type]['k=18'].append({'n': n_value, 'avg_time': average_time})
                 avg_times_by_type[main_type]['k=18_baseline'].append({'n': n_value, 'avg_time': average_baseline_time})
             if n_value == 10 * k_value:
-                avg_times_by_type[main_type]['n=10k'].append({'k': k_value, 'avg_time': average_time})
-                avg_times_by_type[main_type]['n=10k_baseline'].append({'k': k_value, 'avg_time': average_baseline_time})
+                avg_times_by_type[main_type]['n=10k'].append({'n': n_value, 'avg_time': average_time})
+                avg_times_by_type[main_type]['n=10k_baseline'].append({'n': n_value, 'avg_time': average_baseline_time})
             if n_value == k_value:
-                avg_times_by_type[main_type]['n=k'].append({'k': k_value, 'avg_time': average_time})
-                avg_times_by_type[main_type]['n=k_baseline'].append({'k': k_value, 'avg_time': average_baseline_time})
+                avg_times_by_type[main_type]['n=k'].append({'n': n_value, 'avg_time': average_time})
+                avg_times_by_type[main_type]['n=k_baseline'].append({'n': n_value, 'avg_time': average_baseline_time})
 
         # incremental: save each time we run
-        # save_to_json(avg_times_by_type, 'avg_times.json')
-    
-
-# Function to plot line chart by condition
-def plot_chart(condition):
-    plt.figure()
-    plt.title(f'Average Time for {condition}')
-    plt.ylabel('Average Time (seconds)')
-
-    # Set y-axis to be logarithmic
-    plt.yscale('log')
-
-    # Set y-axis limits
-    plt.ylim(10**-2, 10**4)
-
-    if condition == 'k=18':
-        plt.xlabel('n value')
-        plt.xscale('log')
-    elif condition == 'n=10k':
-        plt.xlabel('k value')
-        plt.xlim(15, 60)
-    elif condition == 'n=k':
-        plt.xlabel('k value (where n=k)')
-
-
-    for instance_type, conditions in avg_times_by_type.items():
-        avg_times = conditions[condition]
-        avg_baseline_times = conditions[f"{condition}_baseline"]
-
-        # Determine the key for sorting based on the condition
-        if condition in ['n=10k', 'n=k']:
-            sort_key = 'k'
-        else:
-            sort_key = 'n'  # Default case, adjust if necessary
-
-        x_values = sorted([d[sort_key] for d in avg_times])
-        y_values = [d['avg_time'] for d in sorted(avg_times, key=lambda d: d[sort_key])]
-        x_values_baseline = sorted([d[sort_key] for d in avg_baseline_times])
-        y_values_baseline = [d['avg_time'] for d in sorted(avg_baseline_times, key=lambda d: d[sort_key])]
-
-        plt.plot(x_values, y_values, label=instance_type)
-        plt.plot(x_values_baseline, y_values_baseline, linestyle='--', label=f"{instance_type} Baseline")
-
-
-    plt.legend()
-    plt.savefig(f'Average_Time_{condition}.png')
-    print(f'Figures saved for {condition}')
+        save_to_json(avg_times_by_type, f'avg_times_{task_id}.json')
 
 def save_to_json(data, filename):
     with open(filename, 'w') as f:
@@ -238,12 +188,3 @@ def read_from_json(filename):
 
 if __name__ == "__main__":
     main()
-
-# Generate line chart for k = 18
-plot_chart('k=18')
-
-# Generate line chart for n = 10k
-plot_chart('n=10k')
-
-# Generate line chart for n=k
-plot_chart('n=k')

@@ -272,12 +272,12 @@ pub fn read_constraints<R: Read>(reader: R) -> std::io::Result<ReadConstraintsRe
 
                 let user_sets_start = parts.iter().position(|s| s == "groups").unwrap_or(0) + 1;
                 let user_sets: Vec<Vec<i32>> = parts[user_sets_start..]
-                    .split(|s| s == ")")
+                    .split(|s| s.starts_with("("))
                     .filter(|group| !group.is_empty())
                     .map(|group| {
                         group
                             .iter()
-                            .filter(|&s| s != "(" && s != ")")
+                            .map(|s| s.trim_end_matches(')'))
                             .filter_map(|s| s.parse().ok())
                             .map(|x: i32| x - 1)
                             .collect()
